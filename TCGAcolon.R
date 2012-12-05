@@ -1,5 +1,5 @@
 ## Author: Qin Qian
-## Time-stamp: < modified by qinq :2012-12-02 01:43:39 >
+## Time-stamp: < modified by qinq :2012-12-06 01:22:19 >
 ## TCGA process
 ## Usage: 
 
@@ -29,9 +29,9 @@ CaMP <- function(n, PROB, RANK) {
 
 
 data.orig <- IO(args[1], args[2], args[3])
-#data.orig <- IO("../data/",
-#                "colon_cancer_TCGA_agilent_expression.xls",
-#                "colon_cancer_mutation_all.maf")
+data.orig <- IO("../data/",
+                "colon_cancer_TCGA_agilent_expression.xls",
+                "colon_cancer_mutation_all.maf")
 
 # substitute header . to -
 colnames(data.orig$data1) <- substr(gsub('.','-',colnames(data.orig$data1),fixed=T), 1, 15)
@@ -77,3 +77,30 @@ write.table(mutation.table, file="colon_somatic_mutations.txt", quote=F, sep="\t
 
 # match mutation genes symbol with expression genes symbol
 length(match(unique(data.orig$data2$Hugo_Symbol),Colon.Mutclass$genes))
+
+
+## use top n mutations genes for patient classification
+topN.class <- function(N, mutation.freq, mutation.table){
+topN <- head(mutation.freq, N)$genes
+top.genes.patient <- merge(top100, mutation.table, all=F, sort=F)
+top.genes.patient
+#head(top.genes.patient[top.genes.patient$genes=='APC', ])
+}
+
+toptable <- topN.class(100, Colon.Mutclass, mutation.table)
+patient.match.mutated <- apply(toptable, 1, function(x) {which(as.numeric(x[c(-1,-2)]) >= 1)})
+names(patient.match.mutated) <- toptable$genes
+
+## checking data match
+length(toptable[1,][as.numeric(toptable[1,]) >=1])
+colnames(top.genes.patient)[c(-1,-2)] == colnames(exp.match)
+
+exp.patientclass <- function(){
+}
+
+# for APC 
+APC.mut <- exp.match[, patient.match.mutated$APC]
+APC.non <- exp.match[, -patient.match.mutated$APC]
+t.p.value <- apply(exp.match, 1,
+                   function(x) {t.test(x[patient.match.mutated$APC], x[-patient.match.mutated$APC], conf=.9)$p.value})
+qqnorm(t.p.value); qqline(t.p.value)
