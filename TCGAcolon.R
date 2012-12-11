@@ -1,5 +1,5 @@
 ## Author: Qin Qian
-## Time-stamp: < modified by qinqianhappy :2012-12-11 22:10:23 >
+## Time-stamp: < modified by qinqianhappy :2012-12-11 23:37:09 >
 ## TCGA process
 ## Usage: Downstream genes and feedback loop analysis on exp and mutation data
 
@@ -311,4 +311,3 @@ plot(sort(t.p.value.unif), sort(t.p.value),
 # linear regression
 abline(lm(sort(t.p.value)~sort(t.p.value.unif)), col="red", lty=1, lwd=4)
 lines(loess(sort(w.p.value)~sort(w.p.value.unif)), col="yellow", lty=4, lwd=3)
-
