@@ -1,14 +1,21 @@
 ## Author: Qin Qian
-## Time-stamp: < modified by qinqianhappy :2012-12-11 23:37:09 >
+## Time-stamp: < modified by qinqianhappy :2012-12-13 20:03:47 >
 ## TCGA process
 ## Usage: Downstream genes and feedback loop analysis on exp and mutation data
 
 ## Focusing on the mutated genes with expression data
 ## filter expression data overlapped with only mutated genes now
 
+## TODO: modify to use location info to analyze gene expression
+# limma for arrays
 library(ggplot2)
 library(gplots)
+
+require(limma)
 library(RColorBrewer)
+colorRampPalette(brewer.pal(9,"Blues"))(100)
+display.brewer.all()
+library(car)
 ## gene ontology
 library(GOstats)
 
@@ -16,7 +23,7 @@ library(GOstats)
 library(copa)
 library(iCluster)
 library(som) # use som to replace iCluster knn
-library(CancerMutationAnalysis)
+require(CancerMutationAnalysis)
 
 args <- commandArgs(trailingOnly = TRUE)
 print(args)
@@ -137,7 +144,7 @@ exp.patientclass <- function(patient.match.mutated,exp.match, toptable, mut.gene
       lines(loess(sort(w.p.value)~sort(w.p.value.unif)), col="Blue", lty=1, lwd=1)
       abline(lm(sort(w.p.value)~sort(w.p.value.unif)), col="Blue", lty=1, lwd=1)
       ## scatterplot for uniform t.p.value and observed t.p.value
-      library(car)
+
       ## library(rgl)
       ## scatter3d(sort(seq(length(t.p.value))), sort(t.p.value.unif), sort(t.p.value))
       ## smoothScatter(sort(t.p.value))
@@ -161,21 +168,40 @@ exp.patientclass <- function(patient.match.mutated,exp.match, toptable, mut.gene
       #pdf("../results/expression_diff_APC.pdf"); dev.off()
       head(exp.match[which(w.p.value<cutoff), ])
       ## Col colors are patients
-      heatmap.2(as.matrix(exp.match[as.numeric(w.index),]), col=cm.colors(255), main= paste(gene, "wilcoxon cutoff p.value", cutoff),
-                trace='column', notecex=0.2, ColSideColors = patient.category, dendrogram = "both", cexRow=0.4)
+
+      # hclust
+
+
+      ## heatmap.2 parameters suggestions
+      ## df <- data.frame(expand.grid(x = 1:4, y = 1:4), v = runif(16, -10, 10))
+      ## ggplot(df, aes(x, y, fill = v, label = sprintf("%.1f", v))) + 
+      ##   geom_tile() + geom_text() +
+      ##   scale_fill_gradient2(low = "blue", high = "red")
+      ## heatmap.2(as.matrix(your data),col =
+      ## colorRampPalette(c("white","green","green4","violet","purple"))(100))
+      ##       hmcol<-rev(brewer.pal(11,"RdBu"))
+      ## heatmap(data,col=hmcol)
+      ## You can also use something like
+      ## hmcols<-colorRampPalette(c("red","white","blue"))(256)
+      ## breaks = breaks, ylab="xxx", main="heatmap", key=T,keysize=1.5, Rowv=NA, Colv=NA,cexRow=0.5, cexCol=1.0
+      heatmap.2(as.matrix(exp.match[as.numeric(w.index),]), col=brewer.pal(9,"Blues"), main= paste(gene, "wilcoxon cutoff p.value", cutoff),
+                trace='none', notecex=0.2, ColSideColors = patient.category, dendrogram = "both", cexRow=0.4, scale="row")
 
       # t.test
       t.index <- which(t.p.value < cutoff)
       head(exp.match[which(t.p.value<cutoff), ])
       ## Col colors are patients
-      heatmap.2(as.matrix(exp.match[as.numeric(t.index),]), col=cm.colors(255),main= paste(gene, "t.test cutoff p.value", cutoff),
-                trace='column', notecex=0.2, ColSideColors = patient.category, dendrogram = "both", cexRow=0.4)
+      heatmap.2(as.matrix(exp.match[as.numeric(t.index),]), col=brewer.pal(9,"Blues"),main= paste(gene, "t.test cutoff p.value", cutoff),
+                trace='none', notecex=0.2, ColSideColors = patient.category, dendrogram = "both", cexRow=0.4, scale="row")
   }
 }
 
 ## For downstream genes analysis, use all expressed genes
-toptable <- topN.class(25, Colon.Mutclass, mutation.table)
-toptable.norm <- topN.class()
+toptable <- topN.class(3, Colon.Mutclass, mutation.table)
+
+## no need to normailized by exon lengths of genes
+## toptable.norm <- topN.class()
+
 patient.match.mutated <- apply(toptable, 1, function(x) {which(as.numeric(x[c(-1,-2)]) >= 1)})
 names(patient.match.mutated) <- toptable$genes
 ## call exp.patientclass to draw plot in batch
@@ -223,33 +249,34 @@ exon.explore <- function(exondata, Mutation.freq, cutoff){
     }
 
   plot(freq~log2(length),data=mutation.exonlength, col="blue", main="original mutation frequency vs log(exon lengths)")
-  plot(log2(exon.norm)~log2(length), data=mutation.exonlength, col="blue",
-       main="log2(normalized mutation frequency) vs log2(exon lengths)")
-  abline(lm(log2(exon.norm)~log2(length),data=mutation.exonlength))
-  lines(loess(log2(exon.norm)~log2(length),data=mutation.exonlength), col="Blue", lty=1, lwd=3)
+  ## wrong for mut freq / exonlength and exon length dependency
+##   plot(log2(exon.norm)~log2(length), data=mutation.exonlength, col="blue",
+##        main="log2(normalized mutation frequency) vs log2(exon lengths)")
+##   abline(lm(log2(exon.norm)~log2(length),data=mutation.exonlength))
+##   lines(loess(log2(exon.norm)~log2(length),data=mutation.exonlength), col="Blue", lty=1, lwd=3)
 
-  ## quantile regression not fit for this analysis
-  taus <- c( .50, .75, .95)
-  rqs <- as.list(taus)
-  plot(log2(exon.norm)~log2(length), data=mutation.exonlength, col="blue",
-       main="quantile regression log2(normalized mutation frequency) vs log2(exon lengths)",
-       ylim= c(-20, 20))
-  library(quantreg)
-  for (i in seq(along=taus)){
-    rqs[[i]] = rq(log2(mutation.exonlength$length)~mutation.exonlength[,4], tau=taus[i])
-    lines(log2(mutation.exonlength$length), fitted(rqs[[i]]), col=i+1, lwd=0.3, lty=1)}
-  legend("topright", paste("tau=", taus), inset=.04, lty=1, col=2:(length(taus)+1), border="white")
+##   ## quantile regression not fit for this analysis
+##   taus <- c( .50, .75, .95)
+##   rqs <- as.list(taus)
+##   plot(log2(exon.norm)~log2(length), data=mutation.exonlength, col="blue",
+##        main="quantile regression log2(normalized mutation frequency) vs log2(exon lengths)",
+##        ylim= c(-20, 20))
+##   library(quantreg)
+##   for (i in seq(along=taus)){
+##     rqs[[i]] = rq(log2(mutation.exonlength$length)~mutation.exonlength[,4], tau=taus[i])
+##     lines(log2(mutation.exonlength$length), fitted(rqs[[i]]), col=i+1, lwd=0.3, lty=1)}
+##   legend("topright", paste("tau=", taus), inset=.04, lty=1, col=2:(length(taus)+1), border="white")
     
-  print(rqs)
-  outliertest <- outlierTest(lm(mutation.exonlength[,4]~log2(mutation.exonlength$length)), cutoff = 0.01)
-##     rstudent unadjusted p-value Bonferonni p
-## 1 6.375859         1.9770e-10   1.0265e-06
-## 3 5.167763         2.4579e-07   1.2761e-03
-## 5 5.000464         5.9076e-07   3.0672e-03
-## 2 4.884012         1.0707e-06   5.5591e-03
-## 6 4.797797         1.6491e-06   8.5624e-03
-  output <- list(exon=mutation.exonlength, outlier = outlier, test=outliertest,rq=rqs)
-  output
+##   print(rqs)
+##   outliertest <- outlierTest(lm(mutation.exonlength[,4]~log2(mutation.exonlength$length)), cutoff = 0.01)
+## ##     rstudent unadjusted p-value Bonferonni p
+## ## 1 6.375859         1.9770e-10   1.0265e-06
+## ## 3 5.167763         2.4579e-07   1.2761e-03
+## ## 5 5.000464         5.9076e-07   3.0672e-03
+## ## 2 4.884012         1.0707e-06   5.5591e-03
+## ## 6 4.797797         1.6491e-06   8.5624e-03
+##   output <- list(exon=mutation.exonlength, outlier = outlier, test=outliertest,rq=rqs)
+##   output
 }
 
 ## outlier of exon

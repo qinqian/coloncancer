@@ -14,7 +14,7 @@ getExon()
 	for(i=1;i<exonCount;i++)
 	{
             exonlen[$13] += int(exonEnds[i])-int(exonStarts[i])
-            #printf("%s\t%s\t%s\t%s\tExon_%d\n",$1,$13,$3, int(exonEnds[i])-int(exonStarts[i]), ($3=="+"?i:exonCount-i))
+            printf("%s\t%s\t%s\t%s\tExon_%d\n",$1,$13,$3, int(exonEnds[i])-int(exonStarts[i]), ($3=="+"?i:exonCount-i))
 	}
     }
     END{
@@ -26,11 +26,6 @@ getExon()
     >  $2
 }
 
-ExonLength()
-{
-    echo
-}
-
 main()
 {
     #Rscript -e ""
@@ -40,7 +35,8 @@ main()
 
     # getExon ../hg19_allfields.txt ${temp}/hg19_exon.ref
 
-    Rscript TCGAcolon.R ../data/ colon_cancer_TCGA_agilent_expression.xls colon_cancer_somatic_mutation.maf
+    # Rscript TCGAcolon.R ../data/ colon_cancer_TCGA_agilent_expression.xls colon_cancer_somatic_mutation.maf
+    Rscript TCGAcolon.R ../data/ colon_cancer_TCGA_agilent_expression.xls colon_cancer_mutation_all.maf
 }
 main
 
