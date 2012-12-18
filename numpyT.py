@@ -1,5 +1,4 @@
 import numpy as np
-
 import pandas
 
 
@@ -19,4 +18,3 @@ def func(i):
 
 npfunc = np.fromfunction(func, (10,), dtype=np.int)
 I = numpy.where(np='xxx')
-

@@ -33,10 +33,26 @@ main()
     #colon_cancer_TCGA_agilent_expression.xls
     #colon_cancer_mutation_all.maf
 
-    # getExon ../hg19_allfields.txt ${temp}/hg19_exon.ref
+    # getExon ../ref/hg19_allfields.txt ${temp}/hg19_exon.ref
+
+
+    ## for agilent expression data remove null and NULL
+
+
+    ## for RNASeq, remove |ID ?? and ? gene
+    sed -e '/\?/d' -e 's/|[0-9]*//g' ../COAD/RNAseq_all_expression.txt > ../data/RNAseq_all_expression_Trim.txt
+
+    ## remove replicates gene names
+    cut -f 1 ../data/RNAseq_all_expression_Trim.txt | sort -d | uniq > RNAsequniq
+    cut -f 1 ../data/RNAseq_all_expression_Trim.txt > RNAseqName
+    diff RNAseqName RNAsequniq ## gene SLC35E2 has replicates, named
+                               ## as _1 and _2,  focus on this gene if possible
+
+    #sed 's/\([[:alpha:]]\)\([^ \n]*\)/\2\1ay/g' testsed
+    #/black/!s/cow/horse/ testsed
 
     # Rscript TCGAcolon.R ../data/ colon_cancer_TCGA_agilent_expression.xls colon_cancer_somatic_mutation.maf
-    Rscript TCGAcolon.R ../data/ colon_cancer_TCGA_agilent_expression.xls colon_cancer_mutation_all.maf
+    #Rscript TCGAcolon.R ../data/ colon_cancer_TCGA_agilent_expression.xls colon_cancer_mutation_all.maf
 }
 main
 
