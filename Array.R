@@ -1,5 +1,5 @@
 ## Author: Qin Qian
-## Time-stamp: < modified by qinqianhappy :2012-12-22 22:41:31 >
+## Time-stamp: < modified by qinqianhappy :2012-12-22 23:09:15 >
 ## TCGA process
 ## Usage: Downstream genes and feedback loop analysis on exp and mutation data
 
@@ -44,16 +44,17 @@ rna.diff <- function(expr="", control="", mut="", m="gm", pcutoff=1, ..) {
     foldchange=apply(expr, 1, function(x) mean(x[mut])-mean(x[control]))
     ## a <- tryCatch(cor(c(1,1,1,1,1),c(1,1,1,1,1)), warning=function(w) {print("fail");return(0)})
     ## a <- try(cor(c(1,1), c(1,1), silent=T))
-    T.p.value=apply(expr, 1,
-                    function(x) t.test(x[mut], x[control], ## paired = FALSE,
-                                                alternative = "two.sided")$p.value)#,
-                                         ## warning = function(w) {print("fail"); return(0)}))
-                                       ## var.equal=var.test(x[mut], x[control])$p.value>0.05)$p.value)
-    W.p.value=apply(expr, 1,
-                    function(x) wilcox.test(x[mut], x[control], ## paired = FALSE,
-                                                     alternative = "two.sided")$p.value)#,
-                                         ## warning = function(w) {print("fail"); return(0)}))
-                        ## var.equal=var.test(x[mut], x[control])$p.value>0.05)$p.value)
+    test.m <- function(x, FUN="", ..) {
+      if (var.test(x[mut], x[control])$p.value == "NaN")
+        return(0)
+      else{
+        FUN(x[mut], x[control], paired = FALSE,
+               alternative = "two.sided",
+               var.equal=var.test(x[mut], x[control])$p.value>0.05)$p.value
+    }
+    }
+    T.p.value=apply(expr, 1, function(x) test.m(x, t.test))
+    W.p.value=apply(expr, 1, function(x) test.m(x, wilcox.test))
     ## fdr=p.adjust(T.p.value, method="BH") # BH, Bonferroni, fdr
     t.genes = T.p.value[T.p.value <= pcutoff]
     tfgenes.up = which(T.p.value <= pcutoff & foldchange>0)

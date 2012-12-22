@@ -308,18 +308,17 @@ dev.off()
 ## seq not normalization without correlation filter seq_array_mut differential expressed
 pdf("../results/seq_colon_seq_array_match_normfilter_downstream0.01origbefore.pdf")
 seq_match_common_before <- exp.patientclass(seq_array_mut.index,
-                                            seq_array_non[, c(1:51)],
+                                            log2(seq_array_non[, c(1:51)] + 0.0000001),
                                             head(filtered, 2), cutoff=0.01, "downstream","matchseqnonfiler")
 dev.off()
 
 ## array not normalization without correlation filter seq_array_mut differential expressed
 pdf("../results/array_colon_seq_array_match_normfilter_downstream0.01origbefore.pdf")
-array_match_common <- exp.patientclass(seq_array_mut.index,
+array_match_common_before<- exp.patientclass(seq_array_mut.index,
                                        seq_array_non[, (length(all_norm[1,])/2+1):length(all_norm[1,])],
                                        head(filtered,2),cutoff= 0.01, "downstream","matcharray")
 dev.off()
 
-## take APC as examples, to calculate array and seq significant genes overlap
 collective_gene <- function(gene=""){
   ## using t.test value
   array <- c()
