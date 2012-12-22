@@ -1,5 +1,5 @@
 ## Author: Qin Qian
-## Time-stamp: < modified by qinqianhappy :2012-12-17 21:16:56 >
+## Time-stamp: < modified by qinqianhappy :2012-12-22 22:41:31 >
 ## TCGA process
 ## Usage: Downstream genes and feedback loop analysis on exp and mutation data
 
@@ -14,12 +14,6 @@ library(RColorBrewer)
 library(car)
 ## gene ontology
 library(GOstats)
-
-## optional steps paradigm shift, kegggraph, cytoscape
-library(copa)
-library(iCluster)
-library(som) # use som to replace iCluster knn
-require(CancerMutationAnalysis)
 
 IO <- function(workdirectory, datatype1, datatype2, datatype3,...){
   # datatype2, e.g. mutations
@@ -43,46 +37,50 @@ CaMP <- function(n, PROB, RANK) {
   value
   }
 
-MutPartition <- function (data, top=10, ...) {
-  ## partition Mutation data according to patients and samples
-  sort(table(data[,1]), decreasing = T)
-}
-
-## rna differential expression 
-rna.diff <- function(expr, control, treat, method, pcutoff, fcutoff){
-  if (method=="foldT"){
+## rna differential expression
+rna.diff <- function(expr="", control="", mut="", m="gm", pcutoff=1, ..) {
+  if (m=="foldT"){
     # fold change and T-test
-    foldchange=apply(expr, 1, function(x) mean(x[treat])-mean(x[control]))
+    foldchange=apply(expr, 1, function(x) mean(x[mut])-mean(x[control]))
+    ## a <- tryCatch(cor(c(1,1,1,1,1),c(1,1,1,1,1)), warning=function(w) {print("fail");return(0)})
+    ## a <- try(cor(c(1,1), c(1,1), silent=T))
     T.p.value=apply(expr, 1,
-                    function(x) t.test(x[treat], x[control], var.equal=T)$p.value)
-    #fdr=p.adjust(T.p.value, method="BH") # BH, Bonferroni, fdr
-    fdr = T.p.value
-    # genes
-    genes.up = expr[which(fdr<0.05 & foldchange>0)]
-    genes.down = expr[which(fdr<0.05 & foldchange<0)]
-    genes.id = c(which(fdr<0.05 & foldchange>0), which(fdr<0.05 & foldchange<0))
-    return(expr[genes.id,])
+                    function(x) t.test(x[mut], x[control], ## paired = FALSE,
+                                                alternative = "two.sided")$p.value)#,
+                                         ## warning = function(w) {print("fail"); return(0)}))
+                                       ## var.equal=var.test(x[mut], x[control])$p.value>0.05)$p.value)
+    W.p.value=apply(expr, 1,
+                    function(x) wilcox.test(x[mut], x[control], ## paired = FALSE,
+                                                     alternative = "two.sided")$p.value)#,
+                                         ## warning = function(w) {print("fail"); return(0)}))
+                        ## var.equal=var.test(x[mut], x[control])$p.value>0.05)$p.value)
+    ## fdr=p.adjust(T.p.value, method="BH") # BH, Bonferroni, fdr
+    t.genes = T.p.value[T.p.value <= pcutoff]
+    tfgenes.up = which(T.p.value <= pcutoff & foldchange>0)
+    tfgenes.down = which(T.p.value <= pcutoff & foldchange<0)
+    w.genes = W.p.value[W.p.value<= pcutoff]
+    wfgenes.up = which(W.p.value <= pcutoff & foldchange>0)
+    wfgenes.down = which(W.p.value <= pcutoff & foldchange<0)
+    return(list(tu=tfgenes.up, td=tfgenes.down, wu=wfgenes.up, td=wfgenes.down,
+         w=w.genes, t=t.genes))
   }
   # limma group means
-  if (method=="gm"){
+  if (m=="gm"){
     ## gm.design<-model.matrix(~ 0+factor(c(1,1,2,2)))
-    gm.design<-cbind(control, treat)
-    print(gm.design)
-    colnames(gm.design) <- c("control","treat")
+    gm.design<-cbind(control, mut)
+    colnames(gm.design) <- c("control","mut")
     #gm.design = cbind(control = control, treat = treat)
     print(gm.design)
     gm.fit = lmFit(expr, gm.design)
     print(gm.fit)
-    gm.matrix = makeContrasts(CvsT = control-treat, levels=gm.design)
+    gm.matrix = makeContrasts(MutvsCon = mut - control, levels=gm.design)
     gm.fit = contrasts.fit(gm.fit, gm.matrix)
     gm.fit = eBayes(gm.fit)
     # coef=2 for between-group difference for two group comparison, coef=1 for intercept
-    # coef=1,2,3 for multiple group between-group differences
-    diff.expr <- topTable(gm.fit,  number=length(expr[,1]), adjust.method="BH",
-                          p.value=pcutoff,coef='CvsT')
+    # coef=1,2,3 for multiple group between-group differences, lfc = 0
+    diff.expr <- topTable(gm.fit,  number=length(expr[,1]), adjust.method="BH", p.value=pcutoff,coef="MutvsCon", sort.by = "p")
     return(diff.expr)
   }
-  # limma parameters
 }
 
 # separate patient with mutated genes
@@ -92,7 +90,6 @@ Mut.Table <- function(mutdata, patients, mutfreq,...){
     mutation.patient2genes <- mutdata[grep(paste("^", patients[patientid],"*",sep=""), mutdata$Tumor_Sample_Barcode, perl=T), c(1,16)]
     ## patient.mutationfreq <- table(unique(mutation.patient2genes[,1])) # genes mutation freq
     patient.mutationfreq <- table(mutation.patient2genes[,1]) # genes mutation freq
-
     ## ???? for each patient, overview gene mutation
     mutation.patient.freq <- data.frame(genes=names(patient.mutationfreq), patient=as.vector(patient.mutationfreq))
     mutation.patient.names <- apply(matrix(colnames(mutation.patient.freq)), 1, sub, pattern="patient", replacement=patients[patientid])
@@ -102,100 +99,85 @@ Mut.Table <- function(mutdata, patients, mutfreq,...){
   patient.Mutfreq.merge
 }
 
-## use top n mutations genes for patient classification
-topN.class <- function(N, mutation.freq, mutation.table, cutoff=0.05){
-  topN <- head(mutation.freq, N)
-  print(topN)
-  top.genes.patient <- merge(topN, mutation.table, all=F, sort=F)
-  top.genes.patient
-  #head(top.genes.patient[top.genes.patient$genes=='APC', ])
-}
-
-exp.patientclass <- function(patient.match.mutated="",exp.match="", topgenelist="", mut.genes="", cutoff="", type="", draw=""){
+limma.patientclass <- function(patient.match.mutated="", exp.match="", mut.genes="", cutoff=0.05){
+  ## exp.match: RNAseq expression or array expression or matched expression data
+  ## mut.genes: top mutated genes
   limma.result.gm <- list()
   for(gene in mut.genes) {
-      cat(gene);
-      mut <- exp.match[, patient.match.mutated[[gene]]]
-      non <- exp.match[, -patient.match.mutated[[gene]]]
-      exp.reorder <- cbind(mut, non)
-      ## design matrix
-      control=c(rep(1,length(non[1,])), rep(0,length(mut[1,])))
-      treat=c(rep(0,length(non[1,])), rep(1,length(mut[1,])))
-      limma.result.gm[[gene]] <- rna.diff(exp.reorder,
-                                  control, treat,"gm", cutoff)
-      ## call rna.diff
-      if (draw){
-              patient.category <- rep("red", length(exp.match[1,]))
-      patient.category[patient.match.mutated[[gene]]] <- "blue"
-
-      boxplot(exp.match, col=patient.category,outline=F)
-
-      t.p.value <- apply(exp.match, 1,
-                         function(x) {t.test(x[patient.match.mutated[[gene]]], x[-patient.match.mutated[[gene]]])$p.value})
-      w.p.value <- apply(exp.match, 1,
-                         function(x) {wilcox.test(x[patient.match.mutated[[gene]]], x[-patient.match.mutated[[gene]]])$p.value})
-      length(w.p.value[w.p.value<cutoff])
-      length(t.p.value[t.p.value<cutoff])
-
-      ## write out to results folder
-      write.table(sort(t.p.value), file=paste("../results/ttest_colon", gene, type, "mutated_exp.txt", collapse="", sep=""), quote=F, sep="\t", col.names = F)
-      write.table(sort(w.p.value), file=paste("../results/wilcoxon_colon", gene, type, "mutated_exp.txt", collapse="", sep=""), quote=F, sep="\t", col.names = F)
-      ## Gaussian distribution QQ plot
-      # qqnorm(t.p.value, col='red', main=paste(gene,"unnormalized by exon")); qqline(t.p.value, col='blue')
-      ## Uniform distribution QQ plot
-      t.p.value.unif <- runif(length(t.p.value), min=min(t.p.value), max=max(t.p.value))
-      w.p.value.unif <- runif(length(w.p.value), min=min(w.p.value), max=max(w.p.value))
-
-      ## qqplot(t.p.value.unif, t.p.value, col=2, main=paste(gene,"qqplot t.test p value versus uniform"))
-      ## lines(loess(sort(t.p.value)~sort(t.p.value.unif)), col="Blue", lty=1, lwd=1)
-      ## abline(lm(sort(t.p.value)~sort(t.p.value.unif)), col="Blue", lty=1, lwd=1)
-      ## qqplot(w.p.value.unif, w.p.value, col=2, main=paste(gene, "qqplot wilcoxon test p value versus uniform"))
-      ## lines(loess(sort(w.p.value)~sort(w.p.value.unif)), col="Blue", lty=1, lwd=1)
-      ## abline(lm(sort(w.p.value)~sort(w.p.value.unif)), col="Blue", lty=1, lwd=1)
-      ## scatterplot for uniform t.p.value and observed t.p.value
-      ## library(rgl)
-      ## scatter3d(sort(seq(length(t.p.value))), sort(t.p.value.unif), sort(t.p.value))
-      ## smoothScatter(sort(t.p.value))
-      scatterplot(log2(sort(t.p.value.unif)),log2(sort(t.p.value)), main=paste("Colon cancer t.test scatterplot",gene))
-      scatterplot(log2(sort(w.p.value.unif)),log2(sort(w.p.value)), main=paste("Colon cancer wilcoxon.test scatterplot",gene))
-      ## common scatterplot
-      ## plot(log2(sort(t.p.value.unif)), log2(sort(t.p.value)),
-      ##      main=paste(gene, "common plot of uniform p.value against observed p.value"), pch=2, col="blue", lty=3, lwd=1)
-      ## ## linear regression
-      ## abline(lm(sort(t.p.value)~sort(t.p.value.unif)), col="red", lty=1, lwd=1)
-      ## lines(loess(sort(t.p.value)~sort(t.p.value.unif)), col="yellow", lty=4, lwd=1)
-      ## plot(sort(w.p.value.unif), sort(w.p.value),
-      ##      main=paste(gene, "common plot of uniform p.value against observed p.value"), pch=2, col="blue", lty=3)
-      ## ## linear regression
-      ## abline(lm(sort(w.p.value)~sort(w.p.value.unif)), col="red", lty=1, lwd=4)
-      ## lines(loess(sort(w.p.value)~sort(w.p.value.unif)), col="yellow", lty=4, lwd=3)
-      ## heatmap part
-      ## wilcoxon
-      w.index <- which(w.p.value<=cutoff)
-      #pdf("../results/expression_diff_APC.pdf"); dev.off()
-      head(exp.match[which(w.p.value<cutoff), ])
-      ## bar colors are patients
-      # hclust
-      expw <- as.matrix(exp.match[as.numeric(w.index),])
-      hc.rows <- hclust(dist(expw))
-      hc.cols <- hclust(dist(t(expw)))
-      heatmap.2(as.matrix(exp.match[as.numeric(w.index),]), col=brewer.pal(9,"Blues"), main= paste(gene, "wilcoxon cutoff p.value", cutoff),
-                trace='none', notecex=0.2, ColSideColors = patient.category, dendrogram = "both", cexRow=0.4, scale="row")
-
-      # t.test
-      t.index <- which(t.p.value < cutoff)
-      head(exp.match[which(t.p.value<cutoff), ])
-      ## Col colors are patients
-      heatmap.2(as.matrix(exp.match[as.numeric(t.index),]), col=brewer.pal(9,"Blues"),main= paste(gene, "t.test cutoff p.value", cutoff),
-                trace='none', notecex=0.2, ColSideColors = patient.category, dendrogram = "both", cexRow=0.4, scale="row")
-      }
+    mut <- exp.match[, patient.match.mutated[[gene]]]
+    non <- exp.match[, -patient.match.mutated[[gene]]]
+    exp.reorder <- cbind(mut, non)
+    ## design matrix
+    control=c(rep(1,length(non[1,])), rep(0,length(mut[1,])))
+    treat=c(rep(0,length(non[1,])), rep(1,length(mut[1,])))
+    limma.result.gm[[gene]] <- rna.diff(exp.reorder, control, treat, m="gm", cutoff)
   }
   limma.result.gm
+}
+
+exp.patientclass <- function(patient.match.mutated="",exp.match="", mut.genes="", cutoff=0.05, type="", datatype=""){
+  ## exp.match: RNAseq expression or array expression or matched expression data
+  ## mut.genes: top mutated genes
+  ## type: downstream or feedback
+  ## datatype: matchseq or matcharray or only array, seq
+  output = list()
+  for(gene in mut.genes) {
+        ## for boxplot colors and statistical test groups
+        patient.category <- rep("red", length(exp.match[1,]))
+        patient.category[patient.match.mutated[[gene]]] <- "blue"
+        boxplot(exp.match, col=patient.category,outline=F)
+        ## rna.diff <- function(expr="", control="", mut="", m="gm", pcutoff=1, ..)
+        commontest <- rna.diff(exp.match,
+                               control = which(patient.category == "red"),
+                               mut = which(patient.category == "blue"),
+                               m = "foldT",
+                               pcutoff = 0.01)
+        output[[gene]] <- commontest
+        ## write out to results folder
+        write.table(sort(commontest$t), file=paste("../results/ttest_colon", gene, type, datatype, "mutated_exp.txt", collapse="", sep=""), quote=F, sep="\t", col.names = F)
+        write.table(sort(commontest$w), file=paste("../results/wilcoxon_colon", gene, type, datatype, "mutated_exp.txt", collapse="", sep=""), quote=F, sep="\t", col.names = F)
+      ## Gaussian distribution QQ plot
+      ## qqnorm(t.p.value, col='red', main=paste(gene,"unnormalized by exon")); qqline(t.p.value, col='blue')
+      ## Uniform distribution QQ plot
+        t.p.value.unif <- runif(length(commontest$t), min=min(commontest$t), max=max(commontest$t))
+        w.p.value.unif <- runif(length(commontest$w), min=min(commontest$w), max=max(commontest$w))
+        qqplot(log2(t.p.value.unif), log2(commontest$t), col=2, main=paste(gene,"qqplot t.test p value versus uniform"))
+        lines(loess(sort(log2(commontest$t))~sort(log2(t.p.value.unif))), col="Blue", lty=1, lwd=1)
+        abline(lm(sort(log2(commontest$t))~sort(log2(t.p.value.unif))), col="Blue", lty=1, lwd=1)
+        qqplot(log2(w.p.value.unif), log2(commontest$w), col=2, main=paste(gene,"qqplot wilcoxon.test p value versus uniform"))
+        lines(loess(sort(log2(commontest$w))~sort(log2(w.p.value.unif))), col="Blue", lty=1, lwd=1)
+        abline(lm(sort(log2(commontest$w))~sort(log2(w.p.value.unif))), col="Blue", lty=1, l)
+        ## scatterplot for uniform t.p.value and observed t.p.value
+        ## scatterplot(log2(sort(t.p.value.unif)),log2(sort(commontest$t)), main=paste("Colon cancer t.test scatterplot",gene))
+        ## scatterplot(log2(sort(w.p.value.unif)),log2(sort(commontest$w)), main=paste("Colon cancer wilcoxon.test scatterplot",gene))
+        ## heatmap part
+        ## wilcoxon
+        index <- patient.match.mutated[[gene]]
+        n <- c(1:51)[!(c(1:51) %in% index)]
+        pca <- rep("blue", 51)
+        pca[1:length(index)] <- "red"
+        tnormg <- normalize(as.matrix(exp.match[, c(index, n)]))
+        colnames(tnormg) <- colnames(exp.match)[1:51]
+        wnormg <- normalize(as.matrix(exp.match[, c(index, n)]))
+        colnames(wnormg) <- colnames(exp.match)[1:51]
+        w.index <- names(which(commontest$w<=cutoff))
+        ## bar colors are patients, hclust
+        ## expw <- as.matrix(exp.match[as.numeric(w.index),])
+        ## hc.rows <- hclust(dist(expw))
+        ## hc.cols <- hclust(dist(t(expw)))
+        heatmap.2(wnormg[w.index,], col=rev(colorRampPalette(brewer.pal(11, "RdBu"))(100)), main= paste(gene, "wilcoxon cutoff p.value", cutoff), ## symm=TRUE, trace="none", symbreaks=TRUE, density.info="none",           ## lmat=rbind(c(4, 4, 4), c(2,1,0), c(0,3,0)), lwid=c(1, 6, 1), lhei=c(2, 10, 1),
+                  trace='none', notecex=0.2, ColSideColors = pca, dendrogram = "both", cexRow=0.4, scale="none", density.info = "none", Colv = F, Rowv = F, keysize = 1.2)
+        t.index <- names(which(commontest$t <= cutoff))
+        heatmap.2(tnormg[t.index,], col=rev(colorRampPalette(brewer.pal(11, "RdBu"))(100)), main= paste(gene, "t.test cutoff p.value", cutoff),
+                  trace='none', notecex=0.2, ColSideColors = pca, dendrogram = "both", cexRow=0.4, scale="none", density.info = "none", Colv = F, Rowv = F, keysize = 1.2)
+      }
+  return(output)
 }
 
 meancentering <- function(expdata){
   ## x - rowmeans
   ## rowMeans for all mean value of data.frame
+  ## scale(a, center=T, scale=F)
   data <- apply(expdata, 1, function(x) (x-mean(x)))
   data
 }
@@ -211,13 +193,10 @@ exon.explore <- function(exondata, Mutation.freq, cutoff){
   par(mfrow = c(2,2))
   exon.norm <- mutation.exonlength$freq/as.numeric(mutation.exonlength$length)
   mutation.exonlength <- cbind(mutation.exonlength, log2(exon.norm))
-
   ## mutation.new.rank <- rank(mutation.exonlength$normbyexonlength)
   ## mutation.new.rank
   ## pick the outlier, cutoff 1e+05 exon length for colon cancer
   ## 5 ??? for  validated mutation frequency cutoff
-
-
   print(head(mutation.exonlength))
   outlier <- mutation.exonlength[mutation.exonlength$length >= cutoff,]
   plot(freq~length,data=mutation.exonlength, col="blue", main="original mutation frequency vs exon lengths")
@@ -227,7 +206,6 @@ exon.explore <- function(exondata, Mutation.freq, cutoff){
     print(as.vector(outlier$genes[i]))
     text(as.vector(outlier$length)[i]+10, as.vector(outlier$freq)[i], paste(outlier$genes[i]), cex=.8)
     }
-
   plot(freq~log2(length),data=mutation.exonlength, col="blue", main="original mutation frequency vs log(exon lengths)")
   ## wrong for mut freq / exonlength and exon length dependency
 ##   plot(log2(exon.norm)~log2(length), data=mutation.exonlength, col="blue",
@@ -258,4 +236,3 @@ exon.explore <- function(exondata, Mutation.freq, cutoff){
 ##   output <- list(exon=mutation.exonlength, outlier = outlier, test=outliertest,rq=rqs)
 ##   output
 }
-

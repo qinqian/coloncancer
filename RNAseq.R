@@ -1,5 +1,5 @@
-# Time-stamp: < modified by qinqianhappy :2012-12-17 19:56:03 >
-## For analysis TCGA RNA-seq Data, using DESeq for Raw Reads Count, easyRNASeq, HtSeq for Count Tables
+# Time-stamp: < modified by qinqianhappy :2012-12-19 13:14:32 >
+## For analysis TCGA RNA-seq Data, using DESeq for Raw Reads Count, easyRNASeqDESeq, HtSeq for Count Tables
 ## others cummeRbund, edgeR
 require(DESeq)
 require(DEXSeq)
@@ -41,10 +41,4 @@ ratioHist <- function(rawCounts){
 QC <- function() {
 ## Data quality by DESeq
 ## cdsFullBlind = estimateDispersions( cdsFull, method = "blind" )
-}
-
-metaRank <- function(rank1, rank2){
-  ## meta analysis between different data type,
-  ## e.g. RNASeq and Array
-  sort(rank1*rank2)
 }

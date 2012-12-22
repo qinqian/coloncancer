@@ -1,4 +1,13 @@
 coloncancer
 ===========
 
-for processing tcga data
+for processing tcga colon cancer data
+* Agilent array
+* RNA-seq
+* Somatic mutations
+
+method
+===========
+* Combat
+* limma
+* built-in script
