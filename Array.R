@@ -1,5 +1,5 @@
 ## Author: Qin Qian
-## Time-stamp: < modified by qinqianhappy :2012-12-22 23:09:15 >
+## Time-stamp: < modified by qinqianhappy :2012-12-23 18:04:59 >
 ## TCGA process
 ## Usage: Downstream genes and feedback loop analysis on exp and mutation data
 
@@ -44,6 +44,7 @@ rna.diff <- function(expr="", control="", mut="", m="gm", pcutoff=1, ..) {
     foldchange=apply(expr, 1, function(x) mean(x[mut])-mean(x[control]))
     ## a <- tryCatch(cor(c(1,1,1,1,1),c(1,1,1,1,1)), warning=function(w) {print("fail");return(0)})
     ## a <- try(cor(c(1,1), c(1,1), silent=T))
+    ## if (var.test(c(1,1,1), c(1,1,1))$p.value == "NaN") {print(1)} else {print(2)}
     test.m <- function(x, FUN="", ..) {
       if (var.test(x[mut], x[control])$p.value == "NaN")
         return(0)
@@ -62,7 +63,7 @@ rna.diff <- function(expr="", control="", mut="", m="gm", pcutoff=1, ..) {
     w.genes = W.p.value[W.p.value<= pcutoff]
     wfgenes.up = which(W.p.value <= pcutoff & foldchange>0)
     wfgenes.down = which(W.p.value <= pcutoff & foldchange<0)
-    return(list(tu=tfgenes.up, td=tfgenes.down, wu=wfgenes.up, td=wfgenes.down,
+    return(list(tu=tfgenes.up, td=tfgenes.down, wu=wfgenes.up, wd=wfgenes.down,
          w=w.genes, t=t.genes))
   }
   # limma group means
@@ -132,7 +133,7 @@ exp.patientclass <- function(patient.match.mutated="",exp.match="", mut.genes=""
                                control = which(patient.category == "red"),
                                mut = which(patient.category == "blue"),
                                m = "foldT",
-                               pcutoff = 0.01)
+                               pcutoff = cutoff)
         output[[gene]] <- commontest
         ## write out to results folder
         write.table(sort(commontest$t), file=paste("../results/ttest_colon", gene, type, datatype, "mutated_exp.txt", collapse="", sep=""), quote=F, sep="\t", col.names = F)

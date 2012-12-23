@@ -1,11 +1,24 @@
 ###################
 ## main for TCGA###
 ###################
-
+################################################
+## for mutation analysis
+## driver genes detected
+library(seqinr)
+library(CorMut)
+## limma has zscore calculations
+## optional steps paradigm shift, kegggraph, cytoscape
+library(iCluster)
+library(som) # use som to replace iCluster knn
+library(nnet)
+require(CancerMutationAnalysis)
+################################################
 source("Array.R")
 source("RNAseq.R")
+################################################
 
 ## data.orig <- IO(args[1], args[2], args[3])
+
 data.orig <- IO("../data/",
                "colon_cancer_TCGA_agilent_expression.xls",
                "colon_cancer_mutation_all.maf",
@@ -68,6 +81,8 @@ SeqExp.correlation <- function(expall="", cutoff=0.5, method="pearson"){
 }
 
 normalization <- function(x ,transpose=TRUE, log2t=TRUE, pseudo = 0.0000001){
+  ## som has normalize methods for mean centering
+  ## affy has C implementation of quantilte normalization
   library(preprocessCore) ##
   if (is.vector(x))
     scale(x)
@@ -124,6 +139,7 @@ MutType <- function(genes, mut){
 }
 
 mutct <- MutType(genes=filtered, mutfiltertype)
+write.table(mutct$cl$APC, file="apc_type.txt", quote=F)
 
 ################################################
 ## step2 QC measurement
@@ -182,7 +198,6 @@ indexs0.5 <- names(which(cor.spearman>=0.5))
 indexs0.3 <- names(which(cor.spearman>=0.3))
 indexs0.2 <- names(which(cor.spearman>=0.2))
 
-
 match3.pt <- colnames(mutable)
 ## non normalizaed seq with combat arrays
 seq_array_non <- cbind(data.orig$data3[expseq.gene, match3.pt], data.orig$data1[expseq.gene, match3.pt])
@@ -212,7 +227,7 @@ corcutoff.out <- function(index="", cutoff=0.5, all){
   scatterplot(rowMeans(all[index, 1:51]), rowMeans(all[index, 52:102]), xlab="RNAseq", ylab="Array",
               main=paste("correlation of RNAseq and Array, cutoff=", cutoff))
   dev.off()
-  return(all[index,])
+  all[index,]
 }
 
 corcutoff.out(indexall, cutoff="all", seq_array_mut)
@@ -253,21 +268,19 @@ library(DriverNet) ## very similar to what we are doing
 seq_outlier <- getPatientOutlierMatrix(all_norm[, 1:51]) ## DriverNet
 length(which(seq_outlier == TRUE))  # outlier 18116
 length(which(seq_outlier == FALSE)) # 637642
-
-test1 <- nscore(as.vector(all_norm[,2]))
+## test for NST
+test1 <- nscore(as.vector(all_norm[,5]))
 bak <- backtr(test1$nscore, test1)# tails="separate")
-cor(all_norm[,2], bak)
+cor(all_norm[,5], bak)
 
-## for mutation analysis
-## driver genes detected
-library(seqinr)
-library(CorMut)
-## optional steps paradigm shift, kegggraph, cytoscape
-library(iCluster)
-library(som) # use som to replace iCluster knn
-library(nnet)
-require(CancerMutationAnalysis)
+## use NST for all
+nst <- function(x){
+  y <- nscore(as.vector(x))
+  back <- backtr(y$nscore, y)
+  cor(x, back)
+}
 
+all.nst <- apply(all_norm, 2, function(x) nst(x))
 ################################################
 ## step3, differential analysis of overlap
 ## mutation and arrays
@@ -293,70 +306,89 @@ seq_array_mut.index <- apply(mutable[filtered,], 1, function(x) {which(as.numeri
 ## TODO: adjust mutation to 51 matched patients, done
 ## all_norm, with correlation filtered 0.3 spearman correlation
 ## 1:51 seq, 52: 102 array all_norm
+## cutoff only for P.value, No fold change cutoff yet
 pdf("../results/seq_colon_seq_array_match_normfilter_downstream0.01.pdf")
 seq_match_common <- exp.patientclass(seq_array_mut.index,
                                      all_norm[, 1:(length(all_norm[1,])/2)],
-                                     head(filtered, 2), cutoff=0.01, "downstream","matchseq")
+                                     head(filtered, 2), cutoff=0.05, "downstream","matchseq")
 dev.off()
 
 pdf("../results/array_colon_seq_array_match_normfilter_downstream0.01.pdf")
 array_match_common <- exp.patientclass(seq_array_mut.index,
                                        all_norm[, (length(all_norm[1,])/2+1):length(all_norm[1,])],
-                                       head(filtered,2),cutoff= 0.01, "downstream","matcharray")
+                                       head(filtered,2),cutoff= 0.05, "downstream","matcharray")
 dev.off()
 
 ## seq not normalization without correlation filter seq_array_mut differential expressed
+## remove constant point
+seqorig <- log2(seq_array_non[, c(1:51)] + 0.0000001)
+remove <- apply(seqorig, 1, function(x) length(unique(x)) == 1) ## remove 51
+seqremove <- seqorig[!remove,]
 pdf("../results/seq_colon_seq_array_match_normfilter_downstream0.01origbefore.pdf")
 seq_match_common_before <- exp.patientclass(seq_array_mut.index,
-                                            log2(seq_array_non[, c(1:51)] + 0.0000001),
-                                            head(filtered, 2), cutoff=0.01, "downstream","matchseqnonfiler")
+                                            seqremove,
+                                            head(filtered, 2), cutoff=0.05, "downstream","matchseqnonfiler")
 dev.off()
 
-## array not normalization without correlation filter seq_array_mut differential expressed
+## array without seq normalization without correlation filter seq_array_mut differential expressed
 pdf("../results/array_colon_seq_array_match_normfilter_downstream0.01origbefore.pdf")
+## remove the array genes which overlaps with constant RNAseq points, to match in collective_gene
 array_match_common_before<- exp.patientclass(seq_array_mut.index,
-                                       seq_array_non[, (length(all_norm[1,])/2+1):length(all_norm[1,])],
-                                       head(filtered,2),cutoff= 0.01, "downstream","matcharray")
+                                             seq_array_non[!remove, (length(all_norm[1,])/2+1):length(all_norm[1,])],
+                                             head(filtered,2),cutoff= 0.05, "downstream","matcharray")
 dev.off()
 
-collective_gene <- function(gene=""){
+collective_gene <- function(gene="", expr="", seqe="", arraye="", cutoff=0.05){
   ## using t.test value
-  array <- c()
-  array[1:length(all_norm[,1])] <- "none"
-  array[array_match_common[[gene]]$tu] <- "up"
-  array[array_match_common[[gene]]$td] <- "down"
-  seq <- c()
-  seq[1:length(all_norm[,1])] <- "none"
-  seq[seq_match_common[[gene]]$tu] <- "up"
-  seq[seq_match_common[[gene]]$td] <- "down"
-
-  write.table(rownames(all_norm)[intersect(array_match_common[[gene]]$tu,seq_match_common[[gene]]$tu)], file=paste("collective_up", gene, ".xls", sep=""), quote=F, sep = "\t")
-  write.table(rownames(all_norm)[intersect(array_match_common[[gene]]$td,seq_match_common[[gene]]$td)], file=paste("collective_down", gene, ".xls",sep=""), quote=F, sep = "\t")
-  data.frame(table(array, seq))
-  write.table(data.frame(table(array, seq)), file=paste(gene,"0.01", sep = "", collapse = ""), quote=F, sep="\t")
-  return(table(array, seq))
+  arrayt <- c()
+  arrayt[1:length(expr[,1])] <- "none"
+  print(length(arrayt))
+  arrayt[arraye[[gene]]$tu] <- "up"
+  arrayt[arraye[[gene]]$td] <- "down"
+  print(length(arrayt))
+  seqt <- c()
+  print(names(head(seqe[[gene]]$tu)))
+  seqt[1:length(expr[,1])] <- "none"
+  seqt[seqe[[gene]]$tu] <- "up"
+  seqt[seqe[[gene]]$td] <- "down"
+  write.table(rownames(expr)[intersect(arraye[[gene]]$tu,seqe[[gene]]$tu)], file=paste("t_collective_up", gene, ".xls", sep=""), quote=F, sep = "\t")
+  write.table(intersect(names(arraye[[gene]]$td),names(seqe[[gene]]$td)), file=paste("t_collective_down", gene, ".xls",sep=""), quote=F, sep = "\t")
+  write.table(data.frame(table(arrayt, seqt)), file=paste(gene,"0.05ttest", sep = "", collapse = ""), quote=F, sep="\t")
+  arrayw <- c()
+  arrayw[1:length(expr[,1])] <- "none"
+  arrayw[arraye[[gene]]$wu] <- "up"
+  arrayw[arraye[[gene]]$wd] <- "down"
+  seqw <- c()
+  seqw[1:length(expr[,1])] <- "none"
+  seqw[seqe[[gene]]$wu] <- "up"
+  seqw[seqe[[gene]]$wd] <- "down"
+  write.table(rownames(expr)[intersect(arraye[[gene]]$wu,seqe[[gene]]$wu)], file=paste("w_collective_up", gene, ".xls", sep=""), quote=F, sep = "\t")
+  write.table(intersect(names(arraye[[gene]]$wd),names(seqe[[gene]]$wd)), file=paste("w_collective_down", gene, ".xls",sep=""), quote=F, sep = "\t")
+  write.table(data.frame(table(arrayw, seqw)), file=paste(gene,"0.05wtest", sep = "", collapse = ""), quote=F, sep="\t")
+  output <- list(t=table(arrayt, seqt), w=table(arrayw, seqw))
+  return(output)
 }
 
 # filtered
-APC <- collective_gene("APC")
-SYNE1 <- collective_gene("SYNE1")
-TTN <- collective_gene("TTN")
-TP53 <- collective_gene("TP53")
-APOB <- collective_gene("APOB")
+APC <- collective_gene("APC", expr=all_norm, seqe=seq_match_common, arraye=array_match_common)
+APC.non <- collective_gene("APC", expr=seqremove, seqe=seq_match_common_before, arraye = array_match_common_before)## seqe=seq_match_common, arraye=array_match_common)
+SYNE1 <- collective_gene("SYNE1", expr=all_norm, seqe=seq_match_common, arraye=array_match_common)
+SYNE1.non <- collective_gene("SYNE1", expr=seqremove, seqe=seq_match_common_before, arraye = array_match_common_before)## seqe=seq_match_common, arraye=array_match_common)
 
 ## limmma
-seq_match_limma <- limma.patientclass(patient.match.mutatedSeqArray,
-                                      log2(all[SeqExp.cor, 1:(length(all[1,])/2)]),
-                                      head(topmatch$genes), 1)
+## seq_match_limma <- limma.patientclass(patient.match.mutatedSeqArray,
+##                                       log2(all[SeqExp.cor, 1:(length(all[1,])/2)]),
+##                                       head(topmatch$genes), 1)
+## arraylimmamatchSeq.result <- limma.patientclass(patient.match.mutatedSeqArray,
+##                                                 log2(all[SeqExp.cor, 1:(length(all[1,])/2)]),
+##                                                 head(topmatch$genes), 1)
 
-
-arraylimmamatchSeq.result <- limma.patientclass(patient.match.mutatedSeqArray,
-                                                log2(all[SeqExp.cor, 1:(length(all[1,])/2)]),
-                                                head(topmatch$genes), 1)
-dev.off()
+## GSEA
+## Regulator Potential
 source("../code/GSEA-P-R/GSEA.1.0.R")
-## exp.match is arrays matched with mutation table
 
+## feedback Analysis
+## exp.match is arrays matched with mutation table
 ##   ## array match with RNAseq 52:102
  #   pdf("../results/Colon_Cancer_Scatter_downstreammatchSeq.pdf")
   #  dev.off()
