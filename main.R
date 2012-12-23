@@ -99,11 +99,12 @@ normalization <- function(x ,transpose=TRUE, log2t=TRUE, pseudo = 0.0000001){
 
 ################################################
 ## step1. match data among mutation, Seq and array, normalization
+################################################
 # 51  for all three data
 # 53 for mutation and array
+################################################
 matchdata <- SeqArraymatch(datalist=data.orig)
 attach(matchdata)
-
 ## array Combat, Seq quantile normalization of RPKM
 ## mutation type analysis
 ## SNP: point mutation
@@ -283,13 +284,6 @@ nst <- function(x){
 all.nst <- apply(all_norm, 2, function(x) nst(x))
 ################################################
 ## step3, differential analysis of overlap
-## mutation and arrays
-metaRank <- function(rank1, rank2){
-  ## meta analysis between different data type,
-  ## e.g. RNASeq and Array
-  sort(rank1*rank2)
-}
-
 ## mutation, arrays and Seq
 ## mutclass, data.orig$data2, mutable, filtered 156 high frequent mutated genes
 seq_array_mut.index <- apply(mutable[filtered,], 1, function(x) {which(as.numeric(x) >= 1)})
@@ -297,13 +291,11 @@ seq_array_mut.index <- apply(mutable[filtered,], 1, function(x) {which(as.numeri
 ## classify patients' expression by mutation frequent genes and draw QQ-plot, heatmap
 ########################################
 ## downstream  matchseq analysis
-## rank only by mutation frequency
 ################################
 ## TODO mutation types classification involve
 ################################
 ## topmatch is the patient mutation data (matched with seq and array)
-## take 53 patients mutation frequency now,
-## TODO: adjust mutation to 51 matched patients, done
+## adjust mutation to 51 matched patients
 ## all_norm, with correlation filtered 0.3 spearman correlation
 ## 1:51 seq, 52: 102 array all_norm
 ## cutoff only for P.value, No fold change cutoff yet
@@ -375,6 +367,7 @@ APC.non <- collective_gene("APC", expr=seqremove, seqe=seq_match_common_before, 
 SYNE1 <- collective_gene("SYNE1", expr=all_norm, seqe=seq_match_common, arraye=array_match_common)
 SYNE1.non <- collective_gene("SYNE1", expr=seqremove, seqe=seq_match_common_before, arraye = array_match_common_before)## seqe=seq_match_common, arraye=array_match_common)
 
+######################################
 ## limmma
 ## seq_match_limma <- limma.patientclass(patient.match.mutatedSeqArray,
 ##                                       log2(all[SeqExp.cor, 1:(length(all[1,])/2)]),
@@ -383,59 +376,51 @@ SYNE1.non <- collective_gene("SYNE1", expr=seqremove, seqe=seq_match_common_befo
 ##                                                 log2(all[SeqExp.cor, 1:(length(all[1,])/2)]),
 ##                                                 head(topmatch$genes), 1)
 
-## GSEA
-## Regulator Potential
+########################################
+## GSEA using expression diff and
+## Regulator Potential overlap
+## TFRM test.R
+## meta rank product analysis
+metaRank <- function(rank1, rank2){
+  ## meta analysis between different data type,
+  ## e.g. RNASeq and Array
+  sort(rank1*rank2)
+}
 source("../code/GSEA-P-R/GSEA.1.0.R")
 
+## GOstats, DAVID API
+## methylation1
+## SNP(cnv and noncnv) and CN
+###########################################
+## cluster and icluster and classification
+###########################################
+## 1. hierarchical
+## 2. iCluster
+
+########################################
 ## feedback Analysis
-## exp.match is arrays matched with mutation table
-##   ## array match with RNAseq 52:102
- #   pdf("../results/Colon_Cancer_Scatter_downstreammatchSeq.pdf")
-  #  dev.off()
-##   ## ## For feedback genes regulation analsysis, use overlapped genes from mutation and array
-##   ## exp.match.withgene <- cbind(genes=rownames(exp.match), exp.match)
-##   ## exp.match.overlap <- merge(Colon.Mutclass, exp.match.withgene, sort=F, all=F)
-##   ## exp.match.overlaped <- exp.match.overlap[,-c(1,2)]
-##   ## rownames(exp.match.overlaped) <- exp.match.overlap[,1]
-##   ## pdf("../results/Colon_Cancer_Scatter_feedbackarray.pdf")
-##   ## feedback_array <- exp.patientclass(patient.match.mutated, exp.match.overlaped, toparraymatch, toparraymatch$genes, 0.01, "feedback")
-##   ## dev.off()
-##   ## call rna.diff
-##   ## limma differential expression results list
-##   ## rank products
-##   result <- list(seq=arraylimmamatchSeq.result, array=arraylimmamatcharray.result)
-##   print(toparraymatch$genes==topgenelistSeqArray$genes)
-##   for (gene in toparraymatch$genes){
-## ##  mtscaled <- as.matrix(scale(mtcars))
-## ##  heatmap(mtscaled, Colv=F, scale='none')
-## ##  hc.rows <- hclust(dist(mtscaled))
-## ##  plot(hc.rows)
-## ##  hc.cols <- hclust(dist(t(mtscaled)))
-## ##  heatmap(mtscaled, Colv=as.dendrogram(hc.cols), scale='none')
-## ## # draw heatmap for first cluster
-## ##  heatmap(mtscaled[cutree(hc.rows,k=2)==1,], Colv=as.dendrogram(hc.cols), scale='none')
-## ## # draw heatmap for second cluster
-## ## heatmap(mtscaled[cutree(hc.rows,k=2)==2,], Colv=as.dendrogram(hc.cols), scale='none')
-## ## cutoff p.value 0.01, adjust p.value have no significant genes
-##     seqmatch.gene <- (arraylimmamatchSeq.result[[gene]][arraylimmamatchSeq.result[[gene]]$P.Value<=0.01,])
-##     arraymatch.gene <- (arraylimmamatcharray.result[[gene]][arraylimmamatcharray.result[[gene]]$P.Value<=0.01,])
-##     print(intersect(seqmatch.gene, arraymatch.gene))
-##     ## pdf(paste("limma", gene, "heatmap.pdf", sep = "", collapse = ""))
-##     ## heatmap.2(as.matrix(seqexp), symm=TRUE, trace="none", symbreaks=TRUE, density.info="none",
-##     ##           Rowv = FALSE, cexRow = 0.5,
-##     ##           ## redgreen(75)
-##     ##           col = rev(colorRampPalette(brewer.pal(11, "RdBu"))(100)),
-##     ##           lmat=rbind(c(4, 4, 4), c(2,1,0), c(0,3,0)), lwid=c(1, 6, 1), lhei=c(2, 10, 1),
-##     ##           scale="row")
-##     ## dev.off()
-match.difftable <- SeqArray.limma(expall=all, toparraymatch=head(toparray), topRNAseqmatch=head(topmatch),
-                                  exp.match=exp.match, corgene=SeqExp.cor)
-
+## using the ones overlapped with important mutated genes
+## Driver list, cosmic and archilles BRAF
 ## cutoff 0.05 for non, upregulated and downregulated genes
-## no need to normailized by exon lengths of genes
-## topgenelist.norm <- topN.class()
+###############################################
+## 1. overlap with TCGA validated freq>= 5 mutated genes
+###############################################
 
+###############################################
+## 2. overlap with archilles
+###############################################
+#### 1. BRAF
+
+#### 2. others
+
+###############################################
+## 3. overlap with cosmic
+###############################################
+
+
+########################################
 ## optionally, outlier of exon
+## no need to normailized by exon lengths of genes
 pdf("../results/exonvsmutation.pdf")
 mutation.norm <- exon.explore("../temp/hg19_exon.ref", Colon.Mutclass, 1e5)
 dev.off()
