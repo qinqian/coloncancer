@@ -159,7 +159,7 @@ example1.nscore  <- function() {
    hist(rain, main='Hypothetical population of precipitation estimates')   # Yep, right skewed.
    rsam <- sample(rain,100)  # Extract a sample from rain
    hist(rsam)               # Eerily similar, yet different
-   
+
    rsam.sc <- nscore(rsam)  # normalize the sample
    plot(rsam.sc$trn.table$nscore, rsam.sc$trn.table$x, main='Sample rainfall normal scores')
    lines(approx(rsam.sc$trn.table$nscore, rsam.sc$trn.table$x)) # approx is a linear interp

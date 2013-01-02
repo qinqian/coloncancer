@@ -110,8 +110,8 @@ attach(matchdata)
 ## SNP: point mutation
 ## separate by two alleles, normal and tumor and validated ones
 ## use all the validated genes
-table(data.orig$data2$Variant_Type)
-table(data.orig$data2["Variant_Classification"])
+barplot(table(data.orig$data2$Variant_Type), ylim=c(0,15000), xlim=c(0,4), col=c(0,1,2))
+barplot(table(data.orig$data2["Variant_Classification"]), ylim=c(0,8000), xlim=c(0,10), col=c(0:7))
 
 ## use the genes with mutation above 5
 ## top: filtered by mutation frequency in matched 51 patients
@@ -140,6 +140,9 @@ MutType <- function(genes, mut){
 }
 
 mutct <- MutType(genes=filtered, mutfiltertype)
+par(mfrow = c(1,2))
+barplot(mutct$cl$APC, main="APC mutation classification")
+barplot(mutct$tp$APC, main="APC mutation type")
 write.table(mutct$cl$APC, file="apc_type.txt", quote=F)
 
 ################################################
@@ -240,28 +243,6 @@ corcutoff.out(indexs0.2, cutoff="spearman0.2", seq_array_mut)
 ## after spearman correlation filter and normalization
 all_norm <- corcutoff.out(indexs0.3, cutoff="spearman0.3", seq_array_mut)
 
-## check important driver genes
-## Cancer Driver
-## Archilles BRAF
-braf <- read.delim("../../archilles/archilles_BRAF_han.txt", header=F)
-names(braf) <- "genes"
-Driver <- read.xls("../../archilles/Drivers, Oct 16 2012.xlsx")
-driver <- Driver$HUGO
-matchDriver <- function(genes,..){
-  cat(length(intersect(genes, indexall)), "pearson all \n")
-  cat(length(intersect(genes, index0.2)), "pearson 0.2 \n")
-  cat(length(intersect(genes, index0.5)), "pearson 0.5 \n")
-  cat(length(intersect(genes, index0.3)), "pearson 0.3 \n")
-  cat(length(intersect(genes, indexsall)), "spearman all \n")
-  cat(length(intersect(genes, indexs0.2)), "spearman 0.2 \n")
-  cat(length(intersect(genes, indexs0.5)), "spearman 0.5 \n")
-  cat(length(intersect(genes, indexs0.3)), "spearman 0.3 \n")
-}
-
-## correlation levels
-matchDriver(braf$genes)
-matchDriver(driver)
-
 ## QC of outlier point
 source("../code/nscore.R")
 library(copa)
@@ -277,11 +258,17 @@ cor(all_norm[,5], bak)
 ## use NST for all
 nst <- function(x){
   y <- nscore(as.vector(x))
-  back <- backtr(y$nscore, y)
-  cor(x, back)
+  back <- backtr(y$nscore, y) ## back transform the nscored transform
+  cor=cor(x, back)
 }
 
-all.nst <- apply(all_norm, 2, function(x) nst(x))
+all.brcor <- apply(all_norm, 2, function(x) nst(x)) ## back transform has high correlation
+all.nst <- apply(all_norm, 2, function(x) nscore(x)$nscore) ## transformed matrix
+rownames(all.nst) <- rownames(all_norm)
+write.table(all.nst, file="nstransformed_norm_filterSpear0.3.txt", quote=F,sep="\t")
+write.table(all_norm, file="nottransformed_norm_filterSpear0.3.txt", quote=F,sep="\t")
+all.transcor <- apply(all_norm, 2, function(x) cor(nscore(x)$nscore,x)) ## back transform has high correlation
+
 ################################################
 ## step3, differential analysis of overlap
 ## mutation, arrays and Seq
@@ -302,15 +289,29 @@ seq_array_mut.index <- apply(mutable[filtered,], 1, function(x) {which(as.numeri
 pdf("../results/seq_colon_seq_array_match_normfilter_downstream0.01.pdf")
 seq_match_common <- exp.patientclass(seq_array_mut.index,
                                      all_norm[, 1:(length(all_norm[1,])/2)],
-                                     head(filtered, 2), cutoff=0.05, "downstream","matchseq")
+                                     filtered, cutoff=0.05, "downstream","matchseq")
+dev.off()
+
+pdf("../results/seq_colon_seq_array_match_normfilter_downstream0.01nst.pdf")
+seq_match_commonnst <- exp.patientclass(seq_array_mut.index,
+                                     all.nst[, 1:(length(all.nst[1,])/2)],
+                                     filtered, cutoff=0.05, "downstream","matchseqnst")
 dev.off()
 
 pdf("../results/array_colon_seq_array_match_normfilter_downstream0.01.pdf")
 array_match_common <- exp.patientclass(seq_array_mut.index,
                                        all_norm[, (length(all_norm[1,])/2+1):length(all_norm[1,])],
-                                       head(filtered,2),cutoff= 0.05, "downstream","matcharray")
+                                       filtered,cutoff= 0.05, "downstream","matcharray")
 dev.off()
 
+pdf("../results/array_colon_seq_array_match_normfilter_downstream0.01nst.pdf")
+array_match_commonnst <- exp.patientclass(seq_array_mut.index,
+                                       all.nst[, (length(all.nst[1,])/2+1):length(all.nst[1,])],
+                                       filtered,cutoff= 0.05, "downstream","matcharraynst")
+dev.off()
+
+##############################
+## To compare normalization and correlation filter effectiveness
 ## seq not normalization without correlation filter seq_array_mut differential expressed
 ## remove constant point
 seqorig <- log2(seq_array_non[, c(1:51)] + 0.0000001)
@@ -329,6 +330,7 @@ array_match_common_before<- exp.patientclass(seq_array_mut.index,
                                              seq_array_non[!remove, (length(all_norm[1,])/2+1):length(all_norm[1,])],
                                              head(filtered,2),cutoff= 0.05, "downstream","matcharray")
 dev.off()
+################################
 
 collective_gene <- function(gene="", expr="", seqe="", arraye="", cutoff=0.05){
   ## using t.test value
@@ -362,10 +364,10 @@ collective_gene <- function(gene="", expr="", seqe="", arraye="", cutoff=0.05){
 }
 
 # filtered
-APC <- collective_gene("APC", expr=all_norm, seqe=seq_match_common, arraye=array_match_common)
-APC.non <- collective_gene("APC", expr=seqremove, seqe=seq_match_common_before, arraye = array_match_common_before)## seqe=seq_match_common, arraye=array_match_common)
-SYNE1 <- collective_gene("SYNE1", expr=all_norm, seqe=seq_match_common, arraye=array_match_common)
-SYNE1.non <- collective_gene("SYNE1", expr=seqremove, seqe=seq_match_common_before, arraye = array_match_common_before)## seqe=seq_match_common, arraye=array_match_common)
+filter_overlap <- lapply(filtered, collective_gene, expr=all_norm, seqe=seq_match_common, arraye=array_match_common)
+names(filter_overlap) <- filtered
+head(t(as.data.frame(filter_overlap)))
+## APC.non <- collective_gene("APC", expr=seqremove, seqe=seq_match_common_before, arraye = array_match_common_before)## seqe=seq_match_common, arraye=array_match_common)
 
 ######################################
 ## limmma
@@ -381,35 +383,98 @@ SYNE1.non <- collective_gene("SYNE1", expr=seqremove, seqe=seq_match_common_befo
 ## Regulator Potential overlap
 ## TFRM test.R
 ## meta rank product analysis
+
 metaRank <- function(rank1, rank2){
   ## meta analysis between different data type,
   ## e.g. RNASeq and Array
   sort(rank1*rank2)
 }
+
+source("../code/GOHyperGAll.R")
 source("../code/GSEA-P-R/GSEA.1.0.R")
 
-## GOstats, DAVID API
-## methylation1
-## SNP(cnv and noncnv) and CN
+#########################################
+## GOstats, DAVID API in python and shell
+## brainarray human annotation 16.0.0 version
+library(hgu133plus2hsentrezgcdf)       # entrez
+library(hgu133plus2hsentrezg.db)       # chrom and genesname info
+library(annotate); library(GOstats)
+library(GO.db)
+library(reactome.db)
+goann <- as.list(GOTERM)
+zz <- eapply(GOTERM, function(x) x@Ontology);
+table(unlist(zz))
+goterms <- unlist(eapply(GOTERM, function(x) x@Term))
+goterms[grep("molecular_function", goterms)]
+
+go_df <- data.frame(GOID=unlist(eapply(GOTERM, function(x) x@GOID)), Term=unlist(eapply(GOTERM, function(x) x@Term)),
+                    Ont=unlist(eapply(GOTERM, function(x) x@Ontology)))
+
+head(go_df)
+#########################################
+#########################################
+## methylation(priority)
+## SNP(cnv(priority) and noncnv) and CN(waiting)
+#########################################
+mt <- read.table("methl27_all_expression.txt") ## methlation 27, 203 patients
+mt.patient <- substr(gsub('.','-',colnames(mt),fixed=T), 1, 15)
+length(intersect(mt.patient, colnames(mutable)))  ## 51 patients, all matched
+length(intersect(mt.patient, expseq.patient)) ## 150 patients
+boxplot(-log2(mt), ylim=c(-1, 11), col="gray",outline=F)   ## motif predict CpG methylation level, too biased, quantile????
+
 ###########################################
 ## cluster and icluster and classification
 ###########################################
 ## 1. hierarchical
 ## 2. iCluster
+#########################################
+
+################################################
+## archilles pipeline for synthetically lethality genes
+################################################
+
+#########################################
 
 ########################################
 ## feedback Analysis
 ## using the ones overlapped with important mutated genes
 ## Driver list, cosmic and archilles BRAF
 ## cutoff 0.05 for non, upregulated and downregulated genes
+## TODO, BRAF mutation
 ###############################################
 ## 1. overlap with TCGA validated freq>= 5 mutated genes
 ###############################################
+## check important driver genes
+## Cancer Driver
+## Archilles BRAF
+braf <- read.delim("../../archilles/archilles_BRAF_han.txt", header=F)
+names(braf) <- "genes"
+Driver <- read.xls("../../archilles/Drivers, Oct 16 2012.xlsx")
+driver <- Driver$HUGO
+
+matchDriver <- function(genes,..){
+  cat(length(intersect(genes, indexall)), "pearson all \n")
+  cat(length(intersect(genes, index0.2)), "pearson 0.2 \n")
+  cat(length(intersect(genes, index0.5)), "pearson 0.5 \n")
+  cat(length(intersect(genes, index0.3)), "pearson 0.3 \n")
+  cat(length(intersect(genes, indexsall)), "spearman all \n")
+  cat(length(intersect(genes, indexs0.2)), "spearman 0.2 \n")
+  cat(length(intersect(genes, indexs0.5)), "spearman 0.5 \n")
+  cat(length(intersect(genes, indexs0.3)), "spearman 0.3 \n")
+}
+
+## correlation levels
+matchDriver(braf$genes)
+matchDriver(driver)
+interdriverw <- intersect(as.vector(driver),names(seq_match_common$APC$w))
+interdriverw <- intersect(as.vector(driver),names(array_match_common$APC$w))
+seq_match_common$APC$w[interdriverw]
 
 ###############################################
 ## 2. overlap with archilles
 ###############################################
 #### 1. BRAF
+interdriverw <- intersect(as.vector(driver),names(seq_match_common$APC$w))
 
 #### 2. others
 
