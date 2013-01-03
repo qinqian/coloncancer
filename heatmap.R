@@ -7,6 +7,13 @@ myColor <- function(heatmap, common, palette){
   display.brewer.all()
   cr <- colorRampPalette(colors = c("#2927FF","#FFFFFF","#DF5C5C"), bias=3)
 }
+# Color function to generate green-red heat maps
+my.colorFct <- function(n = 50, low.col = 0.45, high.col=1, saturation = 1) { 
+	if (n < 2) stop("n must be greater than 2")
+	n1 <- n%/%2
+	n2 <- n - n1
+	c(hsv(low.col, saturation, seq(1,0,length=n1)), hsv(high.col, saturation, seq(0,1,length=n2))) 
+}
 
 ## common image heatmap, gplots and heatmap.2 with key and without key
 myHeatmap <- function(type, data, colors, key, ..){
@@ -257,4 +264,106 @@ grd <- GridTopology(cellcentre.offset = c(-600, -600), cellsize = c(1, 1), cells
 obj <- kernel2d(pts = kern.obj, poly = circpol, h0 = 100, nx = 600, ny = 600, kernel='quartic')
 plot(kern.obj[, "x"], kern.obj[, "y"], xlim = c(-600, 600), ylim = c(-600, 600))
 image(obj, add = TRUE, col = terrain.colors(20))
+}
+
+require(plots)
+require(ggplot2)
+require(RColorBrewer)
+source("my.colorFct.R")
+MH63 <- read.xls("si.xls", header=T, row.names=1, sheet=1)
+SY63 <- read.xls("si.xls", header=T, row.names=1, sheet=2)
+ZS97 <- read.xls("si.xls", header=T, row.names=1, sheet=3)
+my.heat <- function(input)
+{
+}
+MH63.t <- as.matrix(MH63[,-1])
+rownames(MH63.t) <- MH63[,1]
+MH63.t <- MH63.t[apply(MH63.t > 100, 1, sum)/length(MH63.t[1,])>0.5 & apply(log2(MH63.t), 1, IQR) > 1.5, ]
+MH63.ts <- t(scale(t(MH63.t)))
+SY63.t <- as.matrix(SY63[,-1])
+rownames(SY63.t) <- SY63[,1]
+SY63.t <- SY63.t[apply(SY63.t > 100, 1, sum)/length(SY63.t[1,])>0.5 & apply(log2(SY63.t), 1, IQR) > 1.5, ]
+SY63.ts <- t(scale(t(SY63.t)))
+
+ZS97.t <- as.matrix(ZS97[,-1])
+rownames(ZS97.t) <- ZS97[,1]
+ZS97.t <- ZS97.t[apply(ZS97.t > 100, 1, sum)/length(ZS97.t[1,])>0.5 & apply(log2(ZS97.t), 1, IQR) > 1.5, ]
+ZS97.ts <- t(scale(t(ZS97.t)))
+
+## layout and par(cfrow, mar) to set the configuration of graphics
+par(mar=c(20,1,3,3))
+nf <- layout(matrix(c(4,5,6,1,2,3),2,3,byrow=TRUE), c(6,6,6), c(2,12), TRUE)
+layout.show(nf)
+x <- 10*(1:nrow(MH63.ts))
+y <- 10*(1:ncol(MH63.ts))
+image(x, y, MH63.ts, col=rev(redgreen(75)), axes=FALSE, xlab="", ylab="", main="MH63 heatmap")
+axis(1, at=seq(min(x), max(x), length=length(rownames(MH63.ts))), labels = rownames(MH63.ts), las=2, ## side = 2,
+     outer=F, tick = F, cex.axis=1.2)
+axis(2, at=seq(min(y), max(y), length=length(colnames(MH63.ts))), labels = colnames(MH63.ts), las=1, ## side = 2,
+     outer=F, tick = F, cex.axis=1.2)
+x <- 10*(1:nrow(SY63.ts))
+y <- 10*(1:ncol(SY63.ts))
+image(x, y, SY63.ts, col=rev(redgreen(75)), axes=FALSE, xlab="", ylab="", main="SY63 heatmap")
+axis(1, at=seq(min(x), max(x), length=length(rownames(SY63.ts))), labels = rownames(SY63.ts), las=2, ## side = 2,
+     outer=F, tick = F, cex.axis=1.2)
+x <- 10*(1:nrow(ZS97.ts))
+y <- 10*(1:ncol(ZS97.ts))
+image(x, y, ZS97.ts, col=rev(redgreen(75)), axes=FALSE, xlab="", ylab="", main="ZS97 heatmap")
+axis(1, at=seq(min(x), max(x), length=length(rownames(ZS97.ts))), labels = rownames(ZS97.ts), las=2, ## side = 2,
+     outer=F, tick = F, cex.axis=1.2)
+## image(matrix(1:max(MH63.ts)), col=colorRampPalette(brewer.pal())
+## par(mar=c(1,1,9,1))
+## image(matrix(1:max(SY63.ts)), col=rev(redgreen(75)), ylim=c(0, 0.1), xlim=c(0, max(SY63.ts)))
+par(mar=c(1,1,1,1))
+## image(matrix(1:max(ZS97.ts)), col=rev(brewer.pal(11, "RdBu")))
+## image(t(matrix(seq(1,max(ZS97.ts), by=0.1))), col=redgreen(75))
+image(matrix(seq(1,max(ZS97.ts), by=0.1)), col=rev(redgreen(75)))
+
+     ## x <- 10*(1:nrow(volcano))
+     ## y <- 10*(1:ncol(volcano))
+     ## image(x, y, volcano, col = terrain.colors(100), axes = FALSE)
+     ## contour(x, y, volcano, levels = seq(90, 200, by = 5),
+     ##         add = TRUE, col = "peru")
+     ## axis(1, at = seq(100, 800, by = 100))
+     ## axis(2, at = seq(100, 600, by = 100))
+
+require(grDevices) # for colours
+     x <- y <- seq(-4*pi, 4*pi, len=27)
+     r <- sqrt(outer(x^2, y^2, "+"))
+     image(z = z <- cos(r^2)*exp(-r/6), col=gray((0:32)/32))
+     box()
+     title(main = "Maunga Whau Volcano", font.main = 4)
+
+dat <- as.matrix(dat[,-1])
+## data filter
+dat <- dat[apply(dat > 100, 1, sum)/length(dat[1,])>0.5 & apply(log2(dat), 1, IQR) > 1.5, ]
+mydatascale <- t(scale(t(dat))) # Centers and scales data.
+hr <- hclust(as.dist(1-cor(t(mydatascale), method="pearson")), method="complete") # Clusters rows by Pearson correlation as distance method.
+hc <- hclust(as.dist(1-cor(mydatascale, method="spearman")), method="complete") # Clusters columns by Spearman correlation as distance method.
+par(mfrow = c(1,2), las=0)
+image(mydatascale, col=my.colorFct())
+image(matrix(1:100),col=rev(colorRampPalette(brewer.pal(11, "RdBu"))(50)))
+test <- as.vector(t(mydatascale))
+## transform data to 2 matched data.frame
+test <- data.frame(expand.grid(y=colnames(mydatascale), x=rownames(mydatascale)),v=test)
+
+# beatiful ggplot heatmap
+gplot <- function(input,      ## data input, better in matrix structure
+name = "ggplot2_heatmap.pdf", ## the name of the export image
+)
+{
+  cin <- t(scale(t(input)))
+  pdf("heatmap_han.pdf", height = 15, width = 25)
+  par(mfrow = c(1,2))
+  ggplot(test, aes(y, x, fill = v, label = sprintf("%.1f", v)))+
+  geom_tile() + geom_text() +
+  scale_fill_gradient2(low = "blue", high = "red")
+  dev.off()
+  heatmap(mydatascale, Rowv=as.dendrogram(hr), Colv=as.dendrogram(hc), col=my.colorFct())
+  heatmap(mydatascale, Rowv=as.dendrogram(hr), Colv=as.dendrogram(hc), col=my.colorFct(), scale = "row")
+  mycl <- cutree(hr, h=max(hr$height)/1.5); mycolhc <- sample(rainbow(256));
+  mycolhc <- mycolhc[as.vector(mycl)]
+  heatmap(mydatascale, Rowv=as.dendrogram(hr), Colv=as.dendrogram(hc), col=my.colorFct(), scale="row", RowSideColors=mycolhc,
+          cexRow = 1.2, cexCol = 1.2, las=1, symm = T)
+  heatmap.2(mydatascale, Rowv=as.dendrogram(hr), Colv=as.dendrogram(hc), col= rev(colorRampPalette(brewer.pal(11, "RdBu"))(100)), scale="row", cellnote=round(mydatascale, 1), notecol = "black", trace = "none", density.info = "none", lmat = rbind(c(0,3,0), c(2,1,0), c(0,4,0)), lwid = c(1,6,2), lhei = c(2,6,2))## RowSideColors=mycolhc
 }
