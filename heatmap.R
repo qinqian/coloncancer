@@ -280,6 +280,7 @@ MH63.t <- as.matrix(MH63[,-1])
 rownames(MH63.t) <- MH63[,1]
 MH63.t <- MH63.t[apply(MH63.t > 100, 1, sum)/length(MH63.t[1,])>0.5 & apply(log2(MH63.t), 1, IQR) > 1.5, ]
 MH63.ts <- t(scale(t(MH63.t)))
+
 SY63.t <- as.matrix(SY63[,-1])
 rownames(SY63.t) <- SY63[,1]
 SY63.t <- SY63.t[apply(SY63.t > 100, 1, sum)/length(SY63.t[1,])>0.5 & apply(log2(SY63.t), 1, IQR) > 1.5, ]
@@ -290,10 +291,26 @@ rownames(ZS97.t) <- ZS97[,1]
 ZS97.t <- ZS97.t[apply(ZS97.t > 100, 1, sum)/length(ZS97.t[1,])>0.5 & apply(log2(ZS97.t), 1, IQR) > 1.5, ]
 ZS97.ts <- t(scale(t(ZS97.t)))
 
+pdf("heatmap_all.pdf", height = 10, width = 15)
+heatmap.2(t(scale(t(SY63.t))), col=redgreen(75), trace = "none", density.info = "none", keysize = 0.8, key=T, Colv = F,
+          lmat = rbind(c(4,0,0), c(2,1,0), c(0,3,0)), lwid = c(3,12,1), lhei = c(2,10,1))
+title("SY63 heatmap")
+
+heatmap.2(t(scale(t(MH63.t))), col=redgreen(75), trace = "none", density.info = "none", keysize = 0.8, key=T, Colv = F,
+          lmat = rbind(c(4,0,0), c(2,1,0), c(0,3,0)), lwid = c(3,12,1), lhei = c(2,10,1))
+title("MH63 heatmap")
+
+heatmap.2(t(scale(t(ZS97.t))), col=redgreen(75), trace = "none", density.info = "none", keysize = 0.8, Colv = F,
+          lmat = rbind(c(4,0,0), c(2,1,0), c(0,3,0)), lwid = c(3,12,1), lhei = c(2,10,1))
+          ## lmat = rbind(c(0,3,0), c(2,1,0), c(0,4,0)), lwid = c(1,6,2), lhei = c(2,6,2))## RowSideColors=mycolhc)
+title("ZS97 heatmap")
+dev.off()
+
 ## layout and par(cfrow, mar) to set the configuration of graphics
+pdf("heatmap_han.pdf", height=15, width = 25)
 par(mar=c(20,1,3,3))
-nf <- layout(matrix(c(4,5,6,1,2,3),2,3,byrow=TRUE), c(6,6,6), c(2,12), TRUE)
-layout.show(nf)
+layout(matrix(c(4,5,6,1,2,3),2,3,byrow=TRUE), c(6,6,6), c(2,12), TRUE)
+## layout.show(nf)
 x <- 10*(1:nrow(MH63.ts))
 y <- 10*(1:ncol(MH63.ts))
 image(x, y, MH63.ts, col=rev(redgreen(75)), axes=FALSE, xlab="", ylab="", main="MH63 heatmap")
@@ -314,10 +331,16 @@ axis(1, at=seq(min(x), max(x), length=length(rownames(ZS97.ts))), labels = rowna
 ## image(matrix(1:max(MH63.ts)), col=colorRampPalette(brewer.pal())
 ## par(mar=c(1,1,9,1))
 ## image(matrix(1:max(SY63.ts)), col=rev(redgreen(75)), ylim=c(0, 0.1), xlim=c(0, max(SY63.ts)))
-par(mar=c(1,1,1,1))
+par(mar=c(3,5,9,9), mai=c(0.7,1,1,3), lheight = 1) ## mai for inches per side
 ## image(matrix(1:max(ZS97.ts)), col=rev(brewer.pal(11, "RdBu")))
 ## image(t(matrix(seq(1,max(ZS97.ts), by=0.1))), col=redgreen(75))
-image(matrix(seq(1,max(ZS97.ts), by=0.1)), col=rev(redgreen(75)))
+z <- matrix(seq(min(ZS97.ts),max(ZS97.ts), length=10))
+x <- seq(round(min(ZS97.ts)-1),(max(ZS97.ts)+1), length=10)
+y <- 1:ncol(z)
+image(x, y, z, col=rev(redgreen(75)), xlab="color key of Rice Heatmap",ylab="", axes=F, cex=3)
+axis(1, at=as.integer(x), las=0, ## side = 2,
+     outer=F, tick = F, cex.axis=1.2)
+dev.off()
 
      ## x <- 10*(1:nrow(volcano))
      ## y <- 10*(1:ncol(volcano))
