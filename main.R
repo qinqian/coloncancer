@@ -243,19 +243,19 @@ corcutoff.out(indexs0.2, cutoff="spearman0.2", seq_array_mut)
 ## after spearman correlation filter and normalization
 all_norm <- corcutoff.out(indexs0.3, cutoff="spearman0.3", seq_array_mut)
 
-## QC of outlier point
-source("../code/nscore.R")
+## qc of outlier point
+source("../code/nscore.r")
 library(copa)
-library(DriverNet) ## very similar to what we are doing
-seq_outlier <- getPatientOutlierMatrix(all_norm[, 1:51]) ## DriverNet
-length(which(seq_outlier == TRUE))  # outlier 18116
-length(which(seq_outlier == FALSE)) # 637642
-## test for NST
+library(drivernet) ## very similar to what we are doing
+seq_outlier <- getpatientoutliermatrix(all_norm[, 1:51]) ## drivernet
+length(which(seq_outlier == true))  # outlier 18116
+length(which(seq_outlier == false)) # 637642
+## test for nst
 test1 <- nscore(as.vector(all_norm[,5]))
 bak <- backtr(test1$nscore, test1)# tails="separate")
 cor(all_norm[,5], bak)
 
-## use NST for all
+## use nst for all
 nst <- function(x){
   y <- nscore(as.vector(x))
   back <- backtr(y$nscore, y) ## back transform the nscored transform
@@ -265,27 +265,27 @@ nst <- function(x){
 all.brcor <- apply(all_norm, 2, function(x) nst(x)) ## back transform has high correlation
 all.nst <- apply(all_norm, 2, function(x) nscore(x)$nscore) ## transformed matrix
 rownames(all.nst) <- rownames(all_norm)
-write.table(all.nst, file="nstransformed_norm_filterSpear0.3.txt", quote=F,sep="\t")
-write.table(all_norm, file="nottransformed_norm_filterSpear0.3.txt", quote=F,sep="\t")
+write.table(all.nst, file="nstransformed_norm_filterspear0.3.txt", quote=f,sep="\t")
+write.table(all_norm, file="nottransformed_norm_filterspear0.3.txt", quote=f,sep="\t")
 all.transcor <- apply(all_norm, 2, function(x) cor(nscore(x)$nscore,x)) ## back transform has high correlation
 
 ################################################
 ## step3, differential analysis of overlap
-## mutation, arrays and Seq
+## mutation, arrays and seq
 ## mutclass, data.orig$data2, mutable, filtered 156 high frequent mutated genes
 seq_array_mut.index <- apply(mutable[filtered,], 1, function(x) {which(as.numeric(x) >= 1)})
 ## call exp.patientclass to draw plot in batch
-## classify patients' expression by mutation frequent genes and draw QQ-plot, heatmap
+## classify patients' expression by mutation frequent genes and draw qq-plot, heatmap
 ########################################
 ## downstream  matchseq analysis
 ################################
-## TODO mutation types classification involve
+## todo mutation types classification involve
 ################################
 ## topmatch is the patient mutation data (matched with seq and array)
 ## adjust mutation to 51 matched patients
 ## all_norm, with correlation filtered 0.3 spearman correlation
 ## 1:51 seq, 52: 102 array all_norm
-## cutoff only for P.value, No fold change cutoff yet
+## cutoff only for p.value, no fold change cutoff yet
 pdf("../results/seq_colon_seq_array_match_normfilter_downstream0.01.pdf")
 seq_match_common <- exp.patientclass(seq_array_mut.index,
                                      all_norm[, 1:(length(all_norm[1,])/2)],
@@ -311,7 +311,7 @@ array_match_commonnst <- exp.patientclass(seq_array_mut.index,
 dev.off()
 
 ##############################
-## To compare normalization and correlation filter effectiveness
+## to compare normalization and correlation filter effectiveness
 ## seq not normalization without correlation filter seq_array_mut differential expressed
 ## remove constant point
 seqorig <- log2(seq_array_non[, c(1:51)] + 0.0000001)
@@ -325,7 +325,7 @@ dev.off()
 
 ## array without seq normalization without correlation filter seq_array_mut differential expressed
 pdf("../results/array_colon_seq_array_match_normfilter_downstream0.01origbefore.pdf")
-## remove the array genes which overlaps with constant RNAseq points, to match in collective_gene
+## remove the array genes which overlaps with constant rnaseq points, to match in collective_gene
 array_match_common_before<- exp.patientclass(seq_array_mut.index,
                                              seq_array_non[!remove, (length(all_norm[1,])/2+1):length(all_norm[1,])],
                                              head(filtered,2),cutoff= 0.05, "downstream","matcharray")
@@ -346,10 +346,10 @@ collective_gene <- function(gene="", expr="", seqe="", arraye="", cutoff=0.05){
   seqt[seqe[[gene]]$tu] <- "up"
   seqt[seqe[[gene]]$td] <- "down"
   tu <- rownames(expr)[intersect(arraye[[gene]]$tu,seqe[[gene]]$tu)]
-  write.table(tu, file=paste("t_collective_up", gene, ".xls", sep=""), quote=F, sep = "\t")
+  write.table(tu, file=paste("t_collective_up", gene, ".xls", sep=""), quote=f, sep = "\t")
   td <- intersect(names(arraye[[gene]]$td),names(seqe[[gene]]$td))
-  write.table(td, file=paste("t_collective_down", gene, ".xls",sep=""), quote=F, sep = "\t")
-  write.table(data.frame(table(arrayt, seqt)), file=paste(gene,"0.05ttest", sep = "", collapse = ""), quote=F, sep="\t")
+  write.table(td, file=paste("t_collective_down", gene, ".xls",sep=""), quote=f, sep = "\t")
+  write.table(data.frame(table(arrayt, seqt)), file=paste(gene,"0.05ttest", sep = "", collapse = ""), quote=f, sep="\t")
   arrayw <- c()
   arrayw[1:length(expr[,1])] <- "none"
   arrayw[arraye[[gene]]$wu] <- "up"
@@ -359,10 +359,10 @@ collective_gene <- function(gene="", expr="", seqe="", arraye="", cutoff=0.05){
   seqw[seqe[[gene]]$wu] <- "up"
   seqw[seqe[[gene]]$wd] <- "down"
   wu <- rownames(expr)[intersect(arraye[[gene]]$wu,seqe[[gene]]$wu)]
-  write.table(wu, file=paste("w_collective_up", gene, ".xls", sep=""), quote=F, sep = "\t")
+  write.table(wu, file=paste("w_collective_up", gene, ".xls", sep=""), quote=f, sep = "\t")
   wd <- intersect(names(arraye[[gene]]$wd),names(seqe[[gene]]$wd))
-  write.table(wd, file=paste("w_collective_down", gene, ".xls",sep=""), quote=F, sep = "\t")
-  write.table(data.frame(table(arrayw, seqw)), file=paste(gene,"0.05wtest", sep = "", collapse = ""), quote=F, sep="\t")
+  write.table(wd, file=paste("w_collective_down", gene, ".xls",sep=""), quote=f, sep = "\t")
+  write.table(data.frame(table(arrayw, seqw)), file=paste(gene,"0.05wtest", sep = "", collapse = ""), quote=f, sep="\t")
   output <- list(t=table(arrayt, seqt), w=table(arrayw, seqw), tl=list(up=tu, down=td), wl=list(up=wu, down=wd))
   return(output)
 }
@@ -370,105 +370,102 @@ collective_gene <- function(gene="", expr="", seqe="", arraye="", cutoff=0.05){
 # filtered
 filter_overlap <- lapply(filtered, collective_gene, expr=all_norm, seqe=seq_match_common, arraye=array_match_common)
 names(filter_overlap) <- filtered
-## APC.non <- collective_gene("APC", expr=seqremove, seqe=seq_match_common_before, arraye = array_match_common_before)## seqe=seq_match_common, arraye=array_match_common)
-save.image("all_seq_array.RData")  ## save workspace
+## apc.non <- collective_gene("apc", expr=seqremove, seqe=seq_match_common_before, arraye = array_match_common_before)## seqe=seq_match_common, arraye=array_match_common)
+save.image("all_seq_array.rdata")  ## save workspace
 
 setwd("../data/")
-load("all_seq_array.RData")  ## recover
-
-
+load("all_seq_array.rdata")  ## recover
 
 ######################################
 ## limmma
-## seq_match_limma <- limma.patientclass(patient.match.mutatedSeqArray,
-##                                       log2(all[SeqExp.cor, 1:(length(all[1,])/2)]),
+## seq_match_limma <- limma.patientclass(patient.match.mutatedseqarray,
+##                                       log2(all[seqexp.cor, 1:(length(all[1,])/2)]),
 ##                                       head(topmatch$genes), 1)
-## arraylimmamatchSeq.result <- limma.patientclass(patient.match.mutatedSeqArray,
-##                                                 log2(all[SeqExp.cor, 1:(length(all[1,])/2)]),
+## arraylimmamatchseq.result <- limma.patientclass(patient.match.mutatedseqarray,
+##                                                 log2(all[seqexp.cor, 1:(length(all[1,])/2)]),
 ##                                                 head(topmatch$genes), 1)
 
 ########################################
-## GSEA using expression diff
-## For APC testing
+## gsea using expression diff
+## for apc testing
 ##
-source("../code/GOHyperGAll.R", verbose = F)
-test.up <- filter_overlap$APC$wl$up
-test.down <- filter_overlap$APC$wl$down
-write.table(test.up, file="TEST_LIST_UP", quote=F)
-write.table(test.down, file="TEST_LIST_DOWN", quote=F)
-GOhyper2GSEA(myfile=c("", ""), type="all") ## input file names, output gmt genesets db
-
+source("../code/gohypergall.r", verbose = f)
+test.up <- filter_overlap$apc$wl$up
+test.down <- filter_overlap$apc$wl$down
+write.table(test.up, file="test_list_up", quote=f)
+write.table(test.down, file="test_list_down", quote=f)
+gohyper2gsea(myfile=c("", ""), type="all") ## input file names, output gmt genesets db
 
 #################
-
-GSEA.batch <- function(gene, data.type, analyze.type){
-  source("../code/GSEA-P-R/GSEA.1.0.R", verbose=F, max.deparse.length=9999)
-  o <- paste(gene, data.type, analyze.type,"_GSEA" sep = ".", collapse = "")
+### may cross enrichment, e.g, make a gmt file for interest gene downstream, then use other genes' downstream to
+### enrich in this one.
+gsea.batch <- function(gene, data.type, analyze.type){
+  source("../code/gsea-p-r/gsea.1.0.r", verbose=f, max.deparse.length=9999)
+  o <- paste(gene, data.type, analyze.type,"_gsea" sep = ".", collapse = "")
   system("mkdir ", o)
-  GSEA(                                                  # Input/Output Files :-------------------------------------------
-       input.ds =  "./Datasets/P53.gct",                 # Input gene expression Affy dataset file in RES or GCT format
-       input.cls = "./Datasets/P53.cls",                 # Input class vector (phenotype) file in CLS format
-       gs.db =     "../GSEA.1.0.R/GeneSetDatabases/C2.gmt",          # Gene set database in GMT format, Use curated and oncogenic datasets
-       output.directory      = o,                        # Directory where to store output and results (default: "")
-       ##  Program parameters :-------------------------------------------------------------------------------------------------------------------------
-       doc.string            = paste(o,"analysis", sep = ""),        # Documentation string used as a prefix to name result files (default: "GSEA.analysis")
-       non.interactive.run   = F,               # Run in interactive (i.e. R GUI) or batch (R command line) mode (default: F)
-       reshuffling.type      = "sample.labels", # Type of permutation reshuffling: "sample.labels" or "gene.labels" (default: "sample.labels"
-       nperm                 = 1000,            # Number of random permutations (default: 1000)
-       weighted.score.type   =  1,              # Enrichment correlation-based weighting: 0=no weight (KS), 1= weigthed, 2 = over-weigthed (default: 1)
-       nom.p.val.threshold   = -1,              # Significance threshold for nominal p-vals for gene sets (default: -1, no thres)
-       fwer.p.val.threshold  = -1,              # Significance threshold for FWER p-vals for gene sets (default: -1, no thres)
-       fdr.q.val.threshold   = 0.25,            # Significance threshold for FDR q-vals for gene sets (default: 0.25)
-       topgs                 = 20,              # Besides those passing test, number of top scoring gene sets used for detailed reports (default: 10)
-       adjust.FDR.q.val      = F,               # Adjust the FDR q-vals (default: F)
- gs.size.threshold.min = 15,              # Minimum size (in genes) for database gene sets to be considered (default: 25)
-       gs.size.threshold.max = 500,             # Maximum size (in genes) for database gene sets to be considered (default: 500)
-       reverse.sign          = F,               # Reverse direction of gene list (pos. enrichment becomes negative, etc.) (default: F)
-       preproc.type          = 0,               # Preproc.normalization: 0=none, 1=col(z-score)., 2=col(rank) and row(z-score)., 3=col(rank). (def: 0)
-       random.seed           = 760435,          # Random number generator seed. (default: 123456)
-       perm.type             = 0,               # For experts only. Permutation type: 0 = unbalanced, 1 = balanced (default: 0)
-       fraction              = 1.0,             # For experts only. Subsampling fraction. Set to 1.0 (no resampling) (default: 1.0)
-       replace               = F,               # For experts only, Resampling mode (replacement or not replacement) (default: F)
-       save.intermediate.results = F,           # For experts only, save intermediate results (e.g. matrix of random perm. scores) (default: F)
-       OLD.GSEA              = F,               # Use original (old) version of GSEA (default: F)
-       use.fast.enrichment.routine = T          # Use faster routine to compute enrichment for random permutations (default: T)
+  gsea(                                                  # input/output files :-------------------------------------------
+       input.ds =  "./datasets/p53.gct",                 # input gene expression affy dataset file in res or gct format
+       input.cls = "./datasets/p53.cls",                 # input class vector (phenotype) file in cls format
+       gs.db =     "../gsea.1.0.r/genesetdatabases/c2.gmt",          # gene set database in gmt format, use curated and oncogenic datasets
+       output.directory      = o,                        # directory where to store output and results (default: "")
+       ##  program parameters :-------------------------------------------------------------------------------------------------------------------------
+       doc.string            = paste(o,"analysis", sep = ""),        # documentation string used as a prefix to name result files (default: "gsea.analysis")
+       non.interactive.run   = f,               # run in interactive (i.e. r gui) or batch (r command line) mode (default: f)
+       reshuffling.type      = "sample.labels", # type of permutation reshuffling: "sample.labels" or "gene.labels" (default: "sample.labels"
+       nperm                 = 1000,            # number of random permutations (default: 1000)
+       weighted.score.type   =  1,              # enrichment correlation-based weighting: 0=no weight (ks), 1= weigthed, 2 = over-weigthed (default: 1)
+       nom.p.val.threshold   = -1,              # significance threshold for nominal p-vals for gene sets (default: -1, no thres)
+       fwer.p.val.threshold  = -1,              # significance threshold for fwer p-vals for gene sets (default: -1, no thres)
+       fdr.q.val.threshold   = 0.25,            # significance threshold for fdr q-vals for gene sets (default: 0.25)
+       topgs                 = 20,              # besides those passing test, number of top scoring gene sets used for detailed reports (default: 10)
+       adjust.fdr.q.val      = f,               # adjust the fdr q-vals (default: f)
+ gs.size.threshold.min = 15,              # minimum size (in genes) for database gene sets to be considered (default: 25)
+       gs.size.threshold.max = 500,             # maximum size (in genes) for database gene sets to be considered (default: 500)
+       reverse.sign          = f,               # reverse direction of gene list (pos. enrichment becomes negative, etc.) (default: f)
+       preproc.type          = 0,               # preproc.normalization: 0=none, 1=col(z-score)., 2=col(rank) and row(z-score)., 3=col(rank). (def: 0)
+       random.seed           = 760435,          # random number generator seed. (default: 123456)
+       perm.type             = 0,               # for experts only. permutation type: 0 = unbalanced, 1 = balanced (default: 0)
+       fraction              = 1.0,             # for experts only. subsampling fraction. set to 1.0 (no resampling) (default: 1.0)
+       replace               = f,               # for experts only, resampling mode (replacement or not replacement) (default: f)
+       save.intermediate.results = f,           # for experts only, save intermediate results (e.g. matrix of random perm. scores) (default: f)
+       old.gsea              = f,               # use original (old) version of gsea (default: f)
+       use.fast.enrichment.routine = t          # use faster routine to compute enrichment for random permutations (default: t)
        )
-## Overlap and leading gene subset assignment analysis of the GSEA results
-  GSEA.Analyze.Sets(
-    directory  = o,                                # Directory where to store output and results (default: "")
+## overlap and leading gene subset assignment analysis of the gsea results
+  gsea.analyze.sets(
+    directory  = o,                                # directory where to store output and results (default: "")
     topgs = 20,                                    # number of top scoring gene sets used for analysis
     height = 16,
     width = 16
     )
 }
 
-
-#### Regulator Potential
-## TFRM test.R
+#### regulator potential
+## tfrm test.r
 ## meta rank product analysis
-metaRank <- function(rank1, rank2){
+metarank <- function(rank1, rank2){
   ## meta analysis between different data type,
-  ## e.g. RNASeq and Array
+  ## e.g. rnaseq and array
   sort(rank1*rank2)
 }
 
 #########################################
-## GOstats, DAVID API in python and shell
+## gostats, david api in python and shell
 ## brainarray human annotation 16.0.0 version
-source("../code/GOHyperGAll.R")
+source("../code/gohypergall.r")
 library(hgu133plus2hsentrezgcdf)       # entrez
 library(hgu133plus2hsentrezg.db)       # chrom and genesname info
-library(annotate); library(GOstats)
-library(GO.db)
+library(annotate); library(gostats)
+library(go.db)
 library(reactome.db)
-goann <- as.list(GOTERM)
-zz <- eapply(GOTERM, function(x) x@Ontology);
+goann <- as.list(goterm)
+zz <- eapply(goterm, function(x) x@ontology);
 table(unlist(zz))
-goterms <- unlist(eapply(GOTERM, function(x) x@Term))
+goterms <- unlist(eapply(goterm, function(x) x@term))
 goterms[grep("molecular_function", goterms)]
 
-go_df <- data.frame(GOID=unlist(eapply(GOTERM, function(x) x@GOID)), Term=unlist(eapply(GOTERM, function(x) x@Term)),
-                    Ont=unlist(eapply(GOTERM, function(x) x@Ontology)))
+go_df <- data.frame(goid=unlist(eapply(goterm, function(x) x@goid)), term=unlist(eapply(goterm, function(x) x@term)),
+                    ont=unlist(eapply(goterm, function(x) x@ontology)))
 head(go_df)
 #########################################
 
@@ -483,38 +480,46 @@ plot.ecdf(as.matrix(mt), col= "blue", lty=3)
 abline(h=0.6, col="red" , lty=2)
 dev.off()
 
-mt.patient <- substr(gsub('.','-',colnames(mt),fixed=T), 1, 15)
+mt.patient <- substr(gsub('.','-',colnames(mt),fixed=t), 1, 15)
 length(intersect(mt.patient, colnames(mutable)))  ## 51 patients, all matched
 length(intersect(mt.patient, expseq.patient)) ## 150 patients
 
-## QC among all patients
+## qc among all patients
 ## for beta value, no need to take log2
-boxplot(mt, ylim=c(0, 1), col="gray",outline=F)   ## motif predict CpG methylation level, too biased, quantile????
+boxplot(mt, ylim=c(0, 1), col="gray",outline=f)   ## motif predict cpg methylation level, too biased, quantile????
 
-## QC for the single array pass
-pdf("../temp/QC_single_met.pdf")
+## qc for the single array pass
+pdf("../temp/qc_single_met.pdf")
 apply(mt, 2, hist)
 dev.off()
 hist((mt[,1]))
 library(minfi)  ## analyze methylation array
-png("MDS_meth27.png", height=1200, width = 1200)
-mdsPlot(as.matrix(mt), sampNames = colnames(mt))
+png("mds_meth27.png", height=1200, width = 1200)
+mdsplot(as.matrix(mt), sampnames = colnames(mt))
 dev.off()
 
-## use UCSC cpg islands
-library(minfi, verbose=F)
-cpg <- read.delim("../data/hg19_cgi", header = F, col.names=LETTERS[1:4])
+## use ucsc cpg islands
+library(minfi, verbose=f)
+cpg <- read.delim("../data/hg19_cgi", header = f, col.names=letters[1:4])
 
 #########################################
-## SNP(cnv(priority) and noncnv) and CN(waiting)
+## snp(cnv(priority) and noncnv) and cn(waiting)
 #########################################
-cnv.patient <- c()
+library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+library(LearnBayes)
+snpcnv <- read.table("snp_cnv_1bp_final.txt", header = T, row.names = 1)
+snpcnv_m<- as.matrix(snpcnv)
+## y denotes seg.mean for each gene, x denotes gene
+plot(sort(snpcnv_m[,1]), pch=".", col="red")
+plot(sort(snpcnv_m[,70]), pch=".", col="red")
+plot(sort(snpcnv_m[,400]), pch=".", col="red")
+plot(sort(snpcnv_m[,444]), pch=".", col="red")
 
 ###########################################
 ## cluster and icluster and classification
 ###########################################
 ## 1. hierarchical
-## 2. iCluster
+## 2. icluster
 #########################################
 
 ################################################
@@ -523,23 +528,23 @@ cnv.patient <- c()
 
 #########################################
 ########################################
-## feedback Analysis
+## feedback analysis
 ## using the ones overlapped with important mutated genes
-## Driver list, cosmic and archilles BRAF
+## driver list, cosmic and archilles braf
 ## cutoff 0.05 for non, upregulated and downregulated genes
-## TODO, BRAF mutation
+## todo, braf mutation
 ###############################################
-## 1. overlap with TCGA validated freq>= 5 mutated genes
+## 1. overlap with tcga validated freq>= 5 mutated genes
 ###############################################
-## Focus on important driver genes for correlation features
-## Cancer Driver
-## Archilles BRAF
-braf <- read.delim("../../archilles/archilles_BRAF_han.txt", header=F)
+## focus on important driver genes for correlation features
+## cancer driver
+## archilles braf
+braf <- read.delim("../../archilles/archilles_braf_han.txt", header=f)
 names(braf) <- "genes"
-Driver <- read.xls("../../archilles/Drivers, Oct 16 2012.xlsx")
-driver <- Driver$HUGO
+driver <- read.xls("../../archilles/drivers, oct 16 2012.xlsx")
+driver <- driver$hugo
 
-matchDriver <- function(genes,..){
+matchdriver <- function(genes,..){
   cat(length(intersect(genes, indexall)), "pearson all \n")
   cat(length(intersect(genes, index0.2)), "pearson 0.2 \n")
   cat(length(intersect(genes, index0.5)), "pearson 0.5 \n")
@@ -551,19 +556,19 @@ matchDriver <- function(genes,..){
 }
 
 ## correlation levels
-matchDriver(braf$genes)
+matchdriver(braf$genes)
 braf$genes ## 40th
-matchDriver(driver)
-interdriverw.seq <- intersect(as.vector(driver),names(seq_match_common$APC$w))
-interdriverw.array <- intersect(as.vector(driver),names(array_match_common$APC$w))
+matchdriver(driver)
+interdriverw.seq <- intersect(as.vector(driver),names(seq_match_common$apc$w))
+interdriverw.array <- intersect(as.vector(driver),names(array_match_common$apc$w))
 interdriverw <- intersect(as.vector(driver), test.up)
-seq_match_common$APC$w[interdriverw]
+seq_match_common$apc$w[interdriverw]
 
 ###############################################
 ## 2. overlap with archilles
 ###############################################
-#### 1. BRAF
-interdriverw <- intersect(as.vector(driver),names(seq_match_common$APC$w))
+#### 1. braf
+interdriverw <- intersect(as.vector(driver),names(seq_match_common$apc$w))
 
 driver.diff <- intersect(driver, indexs0.3)
 braf.diff <- intersect(braf$genes, indexs0.3)
@@ -571,18 +576,24 @@ braf.diff <- intersect(braf$genes, indexs0.3)
 ## correlation
 seq.braf <- as.matrix(all_norm[braf.diff, 1:51]) ## seq
 seq.braf <- t(scale(t(seq.braf)))
-library(RColorBrewer)
+library(rcolorbrewer)
+brafmut <-as.vector(mutable["BRAF",])
+brafmut[which(brafmut>=1)] <- "mut"
+brafmut[which(brafmut==0)] <- "non"
+
 png("BRAF_cor_exp.png", height = 1200, width = 1200)
 par(mar=c(4,3,4,3), mai = c(1,1,0.5,1))
 nf <- layout(matrix(c(2,1),byrow=TRUE), c(6, 6), c(1, 8), TRUE)
 layout.show(nf)
 x <- 10*(1:nrow(seq.braf))
 y <- 10*(1:ncol(seq.braf))
+## show BRAF mutated or not
+##
 image(x, y,seq.braf, col=colorRampPalette(brewer.pal(9, "Blues"))(100), axes=F, xlab = "", ylab = "",
       main = "BRAF essential genes expression")
 axis(1, at=seq(min(x), max(x), length=length(x)), labels = rownames(seq.braf), las=2, ## side = 2,
      outer=F, tick = F, cex.axis=1)
-axis(2, at=seq(min(y), max(y), length=length(y)), labels = colnames(seq.braf), las=1, ## side = 2,
+axis(2, at=seq(min(y), max(y), length=length(y)), labels = brafmut, las=1, ## side = 2,
      outer=F, tick = F, cex.axis=1)
 seq.brafcor <- apply(seq.braf, 1, function(x) cor(x, seq.braf["BRAF", ]))
 par(mar=c(5,3,5,3),mai=c(0.2,1,0.3,1))
@@ -599,7 +610,6 @@ dev.off()
 ###############################################
 ## 3. overlap with cosmic
 ###############################################
-
 
 ########################################
 ## optionally, outlier of exon
