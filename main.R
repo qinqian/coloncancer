@@ -454,7 +454,35 @@ mt <- read.table("methl27_all_expression.txt", header=T, row.names=1) ## methlat
 mt.genes <- rownames(mt)
 mt.genes <- gsub("(^.+)_(\\w+)_(\\d+)", "\\1", mt.genes) ## to remove position info
 mt <- cbind(mt, genes=as.factor(mt.genes))
-length(unique(mt.genes))
+require(plyr)
+test <- head(mt, 1000) ## test program
+## using subset to focus on more group measurement, to divide and conquer
+
+mt.bygenes <- list()
+genes <- unique(mt.genes)
+
+for (i in seq(along.with=genes)){
+  mt.bygenes[[genes[i]]] <- apply(subset(test, grepl(paste("^",genes[i],"_", sep="",collapse=""), rownames(mt)), select=1:ncol(mt))[, -ncol(mt)],
+                          2, mean)
+}
+
+mt.bygenes <- t(data.frame(mt.bygenes))
+
+## what about hCG_1817306 and intergenic methylation regions
+## using plyr, better used for less than 3 group standard
+## mt.bygene <- ddply(test, .(genes), summarize, "TCGA.AA.A01P.11_66"=mean(TCGA.AA.A01P.11_66, na.rm=T))
+## mt.bygene1 <- ddply(test, .(genes), summarize, "TCGA.AA.3673.01_36"=mean(TCGA.AA.3673.01_36, na.rm=T))
+## mt.bygene2 <- ddply(test, .(genes), summarize, "TCGA.AA.3696.01_36"=mean(TCGA.AA.3696.01_36, na.rm=T))
+
+## testmerge <- merge(mt.bygene, mt.bygene1)
+## tesetmerge2 <- merge(testmerge, mt.bygene2)
+
+## ok <- list()
+## okk <- colnames(test[-length(colnames(test))])
+
+## for (i in seq(along.with=okk)){
+##   ok[[1]] <-  ddply(mt, .(genes), summarize, TCGA.AA.3696.01_36=mean(TCGA.AA.3696.01_36, na.rm=T))
+## }
 
 ## use methylation 45 is better
 png("meth27_dist.png")
@@ -506,6 +534,7 @@ library(TxDb.Hsapiens.UCSC.hg19.knownGene)
 library(LearnBayes)
 snpcnv <- read.table("snp_cnv_1bp_final.txt", header = T, row.names = 1)
 snpcnv_m<- as.matrix(snpcnv)
+boxplot(snpcnv[, colnames(mutable)])
 ## y denotes seg.mean for each gene, x denotes gene
 plot(sort(snpcnv_m[,1]), pch=".", col="red")
 plot(sort(snpcnv_m[,70]), pch=".", col="red")
@@ -606,6 +635,22 @@ dev.off()
 ## micRNA GA, Hiseq(wait)
 #########################################
 miRNA <- read.table("../data/miRNA_all_expressionGA.txt", header=T, row.names=1)
+miRNArecords <- read.xls("~/Desktop/miRecords_version3.xls", sheet=1)
+miRNAmatch <- subset(miRNArecords, Target.gene_species_scientific=="Homo sapiens", select=c(2,4,8))
+
+miRNAmatch[,3] <- gsub('*','', miRNAmatch[,3],fixed=T)
+miRNAmatch[,3] <- gsub('[','', miRNAmatch[,3],fixed=T)
+miRNAmatch[,3] <- gsub(']','', miRNAmatch[,3],fixed=T)
+miRNAmatch[,3] <- gsub('has','hsa', miRNAmatch[,3],fixed=T)
+miRNAmatch[,3] <- gsub('R','r', miRNAmatch[,3],fixed=T)
+
+mitest <- list()
+for (i in seq(along.with=rownames(miRNA))){
+  mitest[[i]] <- grep(rownames(miRNA)[i], miRNAmatch[,3], perl=T)
+}
+
+length(intersect(miRNAmatch[,3], rownames(miRNA)))
+
 colnames(miRNA) <- substr(gsub('.','-',colnames(miRNA),fixed=T), 1, 15)
 miRNA <- as.matrix(miRNA)
 mi.match <- intersect(colnames(miRNA), colnames(mutable))
