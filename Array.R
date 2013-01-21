@@ -1,5 +1,5 @@
 ## Author: Qin Qian
-## Time-stamp: < modified by qinqianhappy :2012-12-23 18:04:59 >
+## Time-stamp: < modified by qinqianhappy :2013-01-17 13:36:02 >
 ## TCGA process
 ## Usage: Downstream genes and feedback loop analysis on exp and mutation data
 
@@ -64,7 +64,7 @@ rna.diff <- function(expr="", control="", mut="", m="gm", pcutoff=1, ..) {
     wfgenes.up = which(W.p.value <= pcutoff & foldchange>0)
     wfgenes.down = which(W.p.value <= pcutoff & foldchange<0)
     return(list(tu=tfgenes.up, td=tfgenes.down, wu=wfgenes.up, wd=wfgenes.down,
-         w=w.genes, t=t.genes))
+                w=w.genes, t=t.genes))
   }
   # limma group means
   if (m=="gm"){
@@ -238,3 +238,5 @@ exon.explore <- function(exondata, Mutation.freq, cutoff){
 ##   output <- list(exon=mutation.exonlength, outlier = outlier, test=outliertest,rq=rqs)
 ##   output
 }
+
+

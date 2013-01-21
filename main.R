@@ -1,28 +1,6 @@
 ###################
-## main for TCGA###
+## SL predictor ##
 ###################
-################################################
-## for mutation analysis
-## driver genes detected
-library(seqinr)
-library(CorMut)
-## limma has zscore calculations
-## optional steps paradigm shift, kegggraph, cytoscape
-library(iCluster)
-library(som) # use som to replace iCluster knn
-library(nnet)
-require(CancerMutationAnalysis)
-################################################
-source("Array.R", verbose=F)
-source("RNAseq.R")
-################################################
-
-## data.orig <- IO(args[1], args[2], args[3])
-
-data.orig <- IO("../data/",
-               "colon_cancer_TCGA_agilent_expression.xls",
-               "colon_cancer_mutation_all.maf",
-               "RNAseq_all_expression_Trim.txt")
 
 ################################################
 ## preprocessing
@@ -172,8 +150,6 @@ par(mfrow = c(1,2))
 plot(SeqExp.cor, cor.spearman, main="Outlier control by Spearman correlation vs Pearson correlation",
      xlab="pearson correlation", ylab="spearman correlation", sub="16145 overlapped genes between RNAseq and Agilent array",
      pch='.', col="red")
-Lab.palette <-
-  colorRampPalette(c("blue", "orange", "red"), space = "Lab")
 smoothScatter(SeqExp.cor, cor.spearman, main="Outlier control by Spearman correlation vs Pearson correlation",
      xlab="pearson correlation", ylab="spearman correlation", sub="16145 overlapped genes between RNAseq and Agilent array",
      pch='.')#colramp = Lab.palette)
@@ -286,6 +262,7 @@ seq_array_mut.index <- apply(mutable[filtered,], 1, function(x) {which(as.numeri
 ## all_norm, with correlation filtered 0.3 spearman correlation
 ## 1:51 seq, 52: 102 array all_norm
 ## cutoff only for p.value, no fold change cutoff yet
+
 pdf("../results/seq_colon_seq_array_match_normfilter_downstream0.01.pdf")
 seq_match_common <- exp.patientclass(seq_array_mut.index,
                                      all_norm[, 1:(length(all_norm[1,])/2)],
@@ -371,10 +348,6 @@ collective_gene <- function(gene="", expr="", seqe="", arraye="", cutoff=0.05){
 filter_overlap <- lapply(filtered, collective_gene, expr=all_norm, seqe=seq_match_common, arraye=array_match_common)
 names(filter_overlap) <- filtered
 ## apc.non <- collective_gene("apc", expr=seqremove, seqe=seq_match_common_before, arraye = array_match_common_before)## seqe=seq_match_common, arraye=array_match_common)
-save.image("all_seq_array.rdata")  ## save workspace
-
-setwd("../data/")
-load("all_seq_array.rdata")  ## recover
 
 ######################################
 ## limmma
@@ -394,7 +367,9 @@ test.up <- filter_overlap$apc$wl$up
 test.down <- filter_overlap$apc$wl$down
 write.table(test.up, file="test_list_up", quote=f)
 write.table(test.down, file="test_list_down", quote=f)
-gohyper2gsea(myfile=c("", ""), type="all") ## input file names, output gmt genesets db
+gohyper2gsea(myfile=c("", ""), type="all") ## input file names, output gmt genesets db, may be use default gmt
+
+## using readLines and cat to creat gcl or rnk, and pheno
 
 #################
 ### may cross enrichment, e.g, make a gmt file for interest gene downstream, then use other genes' downstream to
@@ -449,8 +424,8 @@ metarank <- function(rank1, rank2){
   sort(rank1*rank2)
 }
 
-#########################################
-## gostats, david api in python and shell
+#############################################
+## gostats, david api in python and shell,GO pipeline
 ## brainarray human annotation 16.0.0 version
 source("../code/gohypergall.r")
 library(hgu133plus2hsentrezgcdf)       # entrez
@@ -463,7 +438,6 @@ zz <- eapply(goterm, function(x) x@ontology);
 table(unlist(zz))
 goterms <- unlist(eapply(goterm, function(x) x@term))
 goterms[grep("molecular_function", goterms)]
-
 go_df <- data.frame(goid=unlist(eapply(goterm, function(x) x@goid)), term=unlist(eapply(goterm, function(x) x@term)),
                     ont=unlist(eapply(goterm, function(x) x@ontology)))
 head(go_df)
@@ -471,18 +445,28 @@ head(go_df)
 
 #########################################
 ## methylation(priority)
-
 #########################################
-mt <- read.table("methl27_all_expression.txt") ## methlation 27, 203 patients
+## calculate C proportion in -25k to 25k(promoter region)
+## separate patients by genes' promoter methylation level, high and low methylation
+## overlap with CpG, CpG gene and nonCpG gene, and CpG high methylation, CpG low methylation
+mt <- read.table("methl27_all_expression.txt", header=T, row.names=1) ## methlation 27, 203 patients
+## mt45 <- read.table("./methl450_all_expression.txt", header=T, row.names=1) ## too large
+mt.genes <- rownames(mt)
+mt.genes <- gsub("(^.+)_(\\w+)_(\\d+)", "\\1", mt.genes) ## to remove position info
+mt <- cbind(mt, genes=as.factor(mt.genes))
+length(unique(mt.genes))
+
 ## use methylation 45 is better
 png("meth27_dist.png")
 plot.ecdf(as.matrix(mt), col= "blue", lty=3)
 abline(h=0.6, col="red" , lty=2)
 dev.off()
+mt.patient <- substr(gsub('.','-',colnames(mt), fixed=T), 1, 15)
+colnames(mt) <- mt.patient
 
-mt.patient <- substr(gsub('.','-',colnames(mt),fixed=t), 1, 15)
 length(intersect(mt.patient, colnames(mutable)))  ## 51 patients, all matched
 length(intersect(mt.patient, expseq.patient)) ## 150 patients
+## classify
 
 ## qc among all patients
 ## for beta value, no need to take log2
@@ -502,6 +486,19 @@ dev.off()
 library(minfi, verbose=f)
 cpg <- read.delim("../data/hg19_cgi", header = f, col.names=letters[1:4])
 
+meth.diff <- function(
+  x="data",
+  method=function(x) {print}, ## fisher.test or cancer/normal
+  cutoff="")
+{
+  if (is.matrix(x) ||
+      is.data.frame(x))
+    print(1)
+  else
+    {cat(class(x));cat("try other format\n")}
+}
+
+
 #########################################
 ## snp(cnv(priority) and noncnv) and cn(waiting)
 #########################################
@@ -514,7 +511,6 @@ plot(sort(snpcnv_m[,1]), pch=".", col="red")
 plot(sort(snpcnv_m[,70]), pch=".", col="red")
 plot(sort(snpcnv_m[,400]), pch=".", col="red")
 plot(sort(snpcnv_m[,444]), pch=".", col="red")
-
 ###########################################
 ## cluster and icluster and classification
 ###########################################
@@ -605,23 +601,132 @@ image(x, y, seq.brafcor, col = colorRampPalette(brewer.pal(9, "Blues"))(100), xl
 axis(2, at=seq(min(y), max(y), length=length(y)), labels = "BRAF", las=1, ## side = 2,
      outer=F, tick = F, cex.axis=1)
 dev.off()
-#### 2. others
 
-###############################################
-## 3. overlap with cosmic
-###############################################
+#########################################
+## micRNA GA, Hiseq(wait)
+#########################################
+miRNA <- read.table("../data/miRNA_all_expressionGA.txt", header=T, row.names=1)
+colnames(miRNA) <- substr(gsub('.','-',colnames(miRNA),fixed=T), 1, 15)
+miRNA <- as.matrix(miRNA)
+mi.match <- intersect(colnames(miRNA), colnames(mutable))
+length(intersect(colnames(miRNA), colnames(mutable))) ## 44 patients
 
-########################################
-## optionally, outlier of exon
-## no need to normailized by exon lengths of genes
-pdf("../results/exonvsmutation.pdf")
-mutation.norm <- exon.explore("../temp/hg19_exon.ref", Colon.Mutclass, 1e5)
+## micRNA array filter standard, one miRNA expression >0.5 account for 50% among patients
+## inter quantile more than 1 when taken log2
+miRNA <- miRNA[apply(miRNA > 100, 1, sum)/length(miRNA[1,])>0.6 & apply(log2(miRNA), 1, IQR) > 1.5, ]
+mut.p <- colnames(mutable)[seq_array_mut.index[[ATM]]]
+## mut.p %in%
+## boxplot(y, x, log2(miRNA[, intersect(mut.p, colnames(miRNA))]), axes=F) ## all
+miRNA <- miRNA[, mi.match]
+colnames(miRNA) <- c("mut", "non")
+
+scale.miRNA <- t(scale(t(log2(miRNA))))
+miRNA_v <- as.vector(t(scale.miRNA))
+miRNA <- data.frame(expand.grid(y=colnames(miRNA), x=rownames(miRNA)),v=miRNA_v)
+pdf("miRNA_filter.pdf")
+ggplot(miRNA, aes(y, x, fill = v, label = sprintf("%.1f", v)), xlab="", ylab="")+
+  geom_tile() + geom_text() +
+  scale_fill_gradient2(low = "blue", high = "red")
 dev.off()
-write.table(mutation.norm$outlier, file="../results/outlier_exon_1e5.txt", quote=F, sep="\t", col.names = F)
 
-## args <- commandArgs(trailingOnly = TRUE)
-## print(args)
-## main(args)
-main <- function(){
-  print();
+col.aes <- brewer.pal(9,"RdYlBu")
+heatmap.2(scale.miRNA, trace="none", col=rev(col.aes), keysize=0.8, margins=c(10,10)) ## use margins to show fonts
+
+par(mar=c(1, 3, 0.2, 0.2), oma=c(0.5,2,1,2), mai=c(1,2,1,2))
+boxplot(log2(miRNA), outline=F, axes=F, frame=T, horizontal = T,
+        at=seq(1-0.2, ncol(miRNA)+0.3, length=ncol(miRNA)), xlim=1*c(1-0.5, ncol(miRNA)+0.7)) ## ajust at=, xlim=, to ajust box widths, <1 better
+p <- ggplot(miRNA[1:100,], aes(y, x, fill=y))
+p+geom_boxplot()
+## par(las=1) ## all horizontal
+axis(2, at=seq(1-0.2, ncol(miRNA)+0.3,length=ncol(miRNA)), labels = colnames(miRNA), las=2,
+     tick = T, cex.axis=0.8, outer=F)
+par(mar=c(12, 0.3, 1, 1), oma=c(0.5,2,1,2), mai=c(3,1,1,0.5))
+boxplot(log2(miRNA), outline=F, axes=F, frame=T, horizontal = F,
+        at=seq(1-0.2, ncol(miRNA)+0.3, length=ncol(miRNA)), xlim=1*c(1-0.5, ncol(miRNA)+0.7)) ## ajust at=, xlim=, to ajust box widths, <1 better
+## par(las=1) ## all horizontal
+axis(1, at=1*(1:ncol(miRNA) - 0.2), labels = colnames(miRNA), las=2,
+     tick = T, cex.axis=0.8, outer=F, font=4) ## font and las to define character
+text(1,3, labels="test",srt=60)  ## for font angle =======
+boxplot(log2(miRNA))
+
+#############################################
+## protein array, level 2, need normalization
+############################################
+protein <- read.table("../data/colon_protein_level2.txt", header=T,row.names=1)
+colnames(protein) <- substr(gsub('.','-',colnames(protein),fixed=T), 1, 15)
+protein.match <- (intersect(colnames(protein), colnames(mutable))) ## 24 patients
+## BRAF classified
+braf.mut <- colnames(mutable)[which(mutable["BRAF" ,] >= 1)]
+## remove order
+protein <- protein[-1, ]
+protein <- as.matrix(protein)
+ATM <- grep("^ATM.*", rownames(protein), perl=T)
+protein[ATM,]
+
+QC(protein, class=, ggplot=FALSE)
+
+classify <-
+  ## classfify data by mutation data
+  function(standard="", data1, data2, ...){
+}
+
+QC <- function(
+  input = "", ## input data type
+  class = "", ## class to denote mutation state
+  ggplot = TRUE) ## ggplot or hist
+{
+  if (is.matrix(input)) {
+    ## convert to data.frame to import ggplot
+    if (ggplot){
+      input_v <- as.vector(input)
+      input_d <- data.frame(expand.grid(y=colnames(input), x=rownames(input)),v=input_v)
+      p <- ggplot(input_d, aes(y, x, fill=y))
+      p+geom_boxplot()
+    }
+    else {
+      boxplot(input, outline=F)
+    }
+  }
+}
+
+save_recover <- function(save=T, recover=F, dir=""){
+    ## dir to contain workspace
+    save.image("all_seq_array.rdata")  ## save workspace
+    setwd("../data/")
+    load("all_seq_array.rdata")  ## recover
+}
+
+param <- function(){
+  args <- commandArgs(trailingOnly = TRUE)
+  return(args)
+}
+
+sl <- function(
+  inputdir = "", ## input data directory
+  outputdir = "", ## output
+  )
+{
+  ## main function -- sl for synthetic gene prediction
+  args <- param()
+  print args
+  library(RColorBrewer)
+  library(seqinr)
+  library(CorMut)
+  ## limma has zscore calculations
+  ## optional steps paradigm shift, kegggraph, cytoscape
+  library(iCluster)
+  library(som) # use som to replace iCluster knn
+  library(nnet)
+  require(CancerMutationAnalysis)
+  library(ggplot2)
+  library(gplots)
+  ################################################
+  source("Array.R", verbose=F)
+  source("RNAseq.R")
+  ################################################
+  ## data.orig <- IO(args[1], args[2], args[3])
+  data.orig <- IO("../data/",
+                  "colon_cancer_TCGA_agilent_expression.xls",
+                  "colon_cancer_mutation_all.maf",
+                  "RNAseq_all_expression_Trim.txt")
 }

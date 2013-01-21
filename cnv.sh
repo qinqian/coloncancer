@@ -45,7 +45,6 @@ main() {
 
   # batch_average 
   # time python cnv.py ../snpcnv/seg/ hg19 ../snpcnv/output/
-
   paste -d\\t *.txt > snp_cnv_1bp.txt
 }
     

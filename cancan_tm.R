@@ -50,5 +50,4 @@ meta(crude, "foo") <- letters[1:20]
 meta(crude)
 
 dtm <- DocumentTermMatrix(reuters)
-
 inspect(dtm[1:5,100:105])

@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 """
-
+TODO:
+use R and file_manifect.txt to calculate batch average
+for the delimiter has the same sequence.
 """
 # QinQian
 

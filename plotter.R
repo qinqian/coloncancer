@@ -38,3 +38,6 @@ panel.cor <- function(x, y, digits=2, prefix="", cex.cor, ...)
 }
 }
 
+Lab.palette <-
+  colorRampPalette(c("blue", "orange", "red"), space = "Lab")
+plot(1:100, col=Lab.palette(100))

@@ -1,0 +1,24 @@
+#!/bin/bash
+
+echo $0
+find $1 -name "*snp*" -type f -print0 | xargs -0 -i cp {} $2
+
+cd $2
+
+mkdir seg nocnvseg
+mv *nocnv* nocnvseg
+mv *seg.txt seg
+
+seg_to_bed() {
+    sed 1d $1 | cut -f 2,3,4,6 | \
+    awk -F '\t' '\
+    {
+        printf("chr%s\n", $0)
+}' > $2
+    sed 1d ./processed/hg19.refgene | cut -f 3,5,6,13 > ./processed/hg19.bed
+    intersectBed -f 10e-7 -wa -wb  -a after.txt -b hg19.bed | wc -l
+}
+
+arr=(${str//,/})
+#sed_to_bed `basename /mnt/Storage/home/qinq/TCGA/COAD/COAD_Batch28_level3/SNP/BI__Genome_Wide_SNP_6/Level_3/broad.mit.edu__Genome_Wide_SNP_6__TCGA-A6-2670-01A-02D-0819-01__snp_analysis.hg19.seg.txt`
+#sed_to_bed `basename /mnt/Storage/home/qinq/TCGA/COAD/COAD_Batch28_level3/SNP/BI__Genome_Wide_SNP_6/Level_3/broad.mit.edu__Genome_Wide_SNP_6__TCGA-A6-2670-01A-02D-0819-01__snp_analysis.nocnv_hg19.seg.txt`

@@ -351,11 +351,11 @@ dev.off()
      ## axis(2, at = seq(100, 600, by = 100))
 
 require(grDevices) # for colours
-     x <- y <- seq(-4*pi, 4*pi, len=27)
-     r <- sqrt(outer(x^2, y^2, "+"))
-     image(z = z <- cos(r^2)*exp(-r/6), col=gray((0:32)/32))
-     box()
-     title(main = "Maunga Whau Volcano", font.main = 4)
+x <- y <- seq(-4*pi, 4*pi, len=27)
+r <- sqrt(outer(x^2, y^2, "+"))
+image(z = z <- cos(r^2)*exp(-r/6), col=gray((0:32)/32))
+box()
+title(main = "Maunga Whau Volcano", font.main = 4)
 
 dat <- as.matrix(dat[,-1])
 ## data filter
