@@ -1,7 +1,6 @@
 ###################
 ## SL predictor ##
 ###################
-
 ################################################
 ## preprocessing
 SeqArraymatch <- function(datalist=""){
@@ -462,11 +461,16 @@ mt.bygenes <- list()
 genes <- unique(mt.genes)
 
 for (i in seq(along.with=genes)){
-  mt.bygenes[[genes[i]]] <- apply(subset(test, grepl(paste("^",genes[i],"_", sep="",collapse=""), rownames(mt)), select=1:ncol(mt))[, -ncol(mt)],
-                          2, mean)
+  mt.bygenes[[genes[i]]] <- apply(subset(mt, grepl(paste("^",genes[i],"_", sep="",collapse=""), rownames(mt)), select=1:ncol(mt))[, -ncol(mt)],
+                                  2, mean)
 }
 
 mt.bygenes <- t(data.frame(mt.bygenes))
+write.table(mt.bygenes, file="methy27k_by_genes.txt", sep="\t", quote=F)
+mt.bygenes = read.table("methy27k_by_genes.txt", header=T, row.names=1)
+length(intersect(rownames(mt.bygenes), rownames(mutable)))
+length(intersect(rownames(mt.bygenes), rownames(all_norm)))
+
 
 ## what about hCG_1817306 and intergenic methylation regions
 ## using plyr, better used for less than 3 group standard
@@ -532,14 +536,35 @@ meth.diff <- function(
 #########################################
 library(TxDb.Hsapiens.UCSC.hg19.knownGene)
 library(LearnBayes)
+library(rsgcc)  ## need GTK2+
 snpcnv <- read.table("snp_cnv_1bp_final.txt", header = T, row.names = 1)
 snpcnv_m<- as.matrix(snpcnv)
-boxplot(snpcnv[, colnames(mutable)])
+colnames(snpcnv_m) <- substr(gsub(".","-", colnames(snpcnv_m), fixed=T), 1, 15)
+boxplot(snpcnv_m[, colnames(mutable)])
 ## y denotes seg.mean for each gene, x denotes gene
-plot(sort(snpcnv_m[,1]), pch=".", col="red")
-plot(sort(snpcnv_m[,70]), pch=".", col="red")
-plot(sort(snpcnv_m[,400]), pch=".", col="red")
 plot(sort(snpcnv_m[,444]), pch=".", col="red")
+cn.exp.genes <- (intersect(rownames(snpcnv_m), rownames(all_norm)))
+cn.exp.patient <- intersect(colnames(mutable), colnames(snpcnv_m))
+cn.exp <- snpcnv_m[cn.exp.genes, cn.exp.patient]
+### copy number filtering amplification > 1.5
+seq.cn <- all_norm[cn.exp.genes, 1:51]
+array.cn <- all_norm[cn.exp.genes, 52:102]
+cn.seq <- cbind(seq.cn, cn.exp)
+cn.array <- cbind(array.cn, cn.exp)
+cn.seq.MIC <- apply(cn.seq, 1, function(x) MIC(x[1:51], x[52:102]))
+cn.seq.MICv <- unlist(cn.seq.MIC)
+write.table(cn.seq.MICv, file="cn_seq_MIC.txt", sep="\t", quote=F)
+cn.seq.MICv = read.table("cn_seq_MIC.txt")
+seq.mean <- apply(cn.seq, 1, mean)
+cn.mean <- apply(cn.exp, 1, mean)
+cn.miss<-grep("SCGB1C1", names(seq.mean))  ## some "NA" missing values
+cn.seq.MICdf <- cbind(cn_mic=cn.seq.MICv, seq=seq.mean[-cn.miss], cn=cn.mean[-cn.miss])
+ggplot2::qplot( cn.mean[-cn.miss],seq.mean[-cn.miss], main="copy number vs RNAseq expression in colon cancer")
+p <- qplot(cn.mean[-cn.miss],seq.mean[-cn.miss], colour=cn.seq.MICv$x, main="copy number vs RNAseq expression in colon cancer")
+p
+qplot(cn.seq.MICv, binwidth=0.05)
+cn.array.MIC <- apply(cn.array, 1, function(x) MIC(x[1:51], x[52:102]))
+
 ###########################################
 ## cluster and icluster and classification
 ###########################################
@@ -601,7 +626,7 @@ braf.diff <- intersect(braf$genes, indexs0.3)
 ## correlation
 seq.braf <- as.matrix(all_norm[braf.diff, 1:51]) ## seq
 seq.braf <- t(scale(t(seq.braf)))
-library(rcolorbrewer)
+library(RColorBrewer)
 brafmut <-as.vector(mutable["BRAF",])
 brafmut[which(brafmut>=1)] <- "mut"
 brafmut[which(brafmut==0)] <- "non"
@@ -612,24 +637,42 @@ nf <- layout(matrix(c(2,1),byrow=TRUE), c(6, 6), c(1, 8), TRUE)
 layout.show(nf)
 x <- 10*(1:nrow(seq.braf))
 y <- 10*(1:ncol(seq.braf))
-## show BRAF mutated or not
-##
-image(x, y,seq.braf, col=colorRampPalette(brewer.pal(9, "Blues"))(100), axes=F, xlab = "", ylab = "",
+image(x, y,seq.braf, col=rev(colorRampPalette(brewer.pal(9, "RdYlBu"))(100)), axes=F, xlab = "", ylab = "",
       main = "BRAF essential genes expression")
 axis(1, at=seq(min(x), max(x), length=length(x)), labels = rownames(seq.braf), las=2, ## side = 2,
      outer=F, tick = F, cex.axis=1)
 axis(2, at=seq(min(y), max(y), length=length(y)), labels = brafmut, las=1, ## side = 2,
      outer=F, tick = F, cex.axis=1)
-seq.brafcor <- apply(seq.braf, 1, function(x) cor(x, seq.braf["BRAF", ]))
 par(mar=c(5,3,5,3),mai=c(0.2,1,0.3,1))
 seq.brafcor <- as.matrix(seq.brafcor)
 x <- 10*(1:nrow(seq.brafcor))
 y <- 10*(1:ncol(seq.brafcor))
-image(x, y, seq.brafcor, col = colorRampPalette(brewer.pal(9, "Blues"))(100), xlab = "", ylab = "",
+image(x, y, seq.brafcor, col = rev(colorRampPalette(brewer.pal(9, "RdYlBu"))(100)), xlab = "", ylab = "",
       axes=F, main="BRAF correlation with essential gene")
 axis(2, at=seq(min(y), max(y), length=length(y)), labels = "BRAF", las=1, ## side = 2,
      outer=F, tick = F, cex.axis=1)
 dev.off()
+
+seq.brafp <- apply(seq.braf, 1, function(x) cor(x, as.numeric(all_norm["BRAF", 1:51]), method="pearson"))
+seq.brafcor <- apply(seq.braf, 1, function(x) cor(x, as.numeric(all_norm["BRAF", 1:51]), method="spearman"))
+seq.brafMIC <- apply(seq.braf, 1, function(x) MIC(x, as.numeric(all_norm["BRAF", 1:51])))
+seq.brafdist <- apply(seq.braf, 1, function(x) distance(x, as.numeric(all_norm["BRAF", 1:51])))
+seq.brafkendall <- apply(seq.braf, 1, function(x) cor(x, as.numeric(all_norm["BRAF", 1:51]), method="kendall"))
+
+qplot(seq.brafcor, seq.brafMIC)
+scatterplot(as.vector(seq.brafcor), seq.brafMIC)
+
+## par(bg="black")
+## using RNA sequence
+plot(seq.brafcor, col="red", lty=1, xlab="genes", ylab="correlation value", type="b", ylim=c(-0.8,0.7))
+lines(seq.brafMIC, col="blue", lty=2)
+lines(seq.brafdist, col="black", lty=3)
+lines(seq.brafp, col="purple", lty=4)
+lines(seq.brafkendall, col="green", lty=5)
+title("BRAF essential genes' correlation methods comparison")
+legend("bottomright", paste("cor:", c("spearman", "MIC", "distance", "pearson", "kendall")),
+       inset=0.01, lty=1:5, col=c("red", "blue", "black", "purple", "green"), border="black", merge=T)
+
 
 #########################################
 ## micRNA GA, Hiseq(wait)
@@ -708,7 +751,24 @@ protein <- as.matrix(protein)
 ATM <- grep("^ATM.*", rownames(protein), perl=T)
 protein[ATM,]
 
-QC(protein, class=, ggplot=FALSE)
+QC(protein, ggplot=FALSE)
+
+## integrate different correlation method
+method=c("MIC", "distance", "spearman", "pearman", "kendall",
+  "liquid", "entropy"))
+
+distance <- function(x, y){
+  require(energy)
+  dcov(x, y)
+}
+
+MIC <- function(x, y) {
+      minedata <- rbind(x, y)
+      source("MINE.R")
+      rMINE(minedata, "matrix", 0)
+      minecor <- read.csv("matrix,mv=0,cv=0.0,B=n^0.6,Results.csv")[,3]
+      return(minecor)
+}
 
 classify <-
   ## classfify data by mutation data
@@ -734,13 +794,6 @@ QC <- function(
   }
 }
 
-save_recover <- function(save=T, recover=F, dir=""){
-    ## dir to contain workspace
-    save.image("all_seq_array.rdata")  ## save workspace
-    setwd("../data/")
-    load("all_seq_array.rdata")  ## recover
-}
-
 param <- function(){
   args <- commandArgs(trailingOnly = TRUE)
   return(args)
@@ -753,7 +806,7 @@ sl <- function(
 {
   ## main function -- sl for synthetic gene prediction
   args <- param()
-  print args
+  print(args)
   library(RColorBrewer)
   library(seqinr)
   library(CorMut)
@@ -765,6 +818,8 @@ sl <- function(
   require(CancerMutationAnalysis)
   library(ggplot2)
   library(gplots)
+  library(car)
+  library(rgl)
   ################################################
   source("Array.R", verbose=F)
   source("RNAseq.R")
