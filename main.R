@@ -476,12 +476,21 @@ mt.exp.match = mt.bygenes[mt.exp.g, mt.exp.p]
 exp.mt.match = all_norm[mt.exp.g, 1:51] ## using log2, quantile normalize and correlation filtering RNAseq data
 mt.exp.all = cbind(mt.exp.match, exp.mt.match)
 mt.exp.spearman = apply(mt.exp.all, 1, function(x) cor(x[1:51], x[52:102], method="spearman"))
-mt.exp.pearson = apply(mt.exp.all, 1, function(x) cor(x[1:51], x[52:102], method="pearson"))
+mt.exp.pearson = apply(na.exclude(mt.exp.all), 1, function(x) cor(x[1:51], x[52:102], method="pearson")) ## same
+mt.exp.distcor = apply(na.exclude(mt.exp.all), 1, function(x) distance.cov(x[1:51], x[52:102])) ## NA, omit, exclude
 mt.exp.MIC = apply(mt.exp.all, 1, function(x) MIC(x[1:51], x[52:102]))
+mt.exp.biwt = apply(na.exclude(mt.exp.all), 1, function(x) biwt.cor(rbind(jitter(x[1:51]), jitter(x[52:102])), output="vector"))                    
+mt.exp.MIC.v = unlist(mt.exp.MIC)
+
 plot(sort(mt.exp.spearman))
 lines(sort(mt.exp.pearson), col="red")
+lines(sort(mt.exp.MIC.v), col="blue")
+lines(sort(mt.exp.distcor), col="green")
+
 qplot(mt.exp.spearman)
-mt.exp.distcor
+qplot(mt.exp.distcor) ## false
+qplot(mt.exp.pearson)
+qplot(mt.exp.MIC.v)
 
 ## what about hCG_1817306 and intergenic methylation regions
 ## using plyr, better used for less than 3 group standard
