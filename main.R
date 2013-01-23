@@ -468,9 +468,20 @@ for (i in seq(along.with=genes)){
 mt.bygenes <- t(data.frame(mt.bygenes))
 write.table(mt.bygenes, file="methy27k_by_genes.txt", sep="\t", quote=F)
 mt.bygenes = read.table("methy27k_by_genes.txt", header=T, row.names=1)
-length(intersect(rownames(mt.bygenes), rownames(mutable)))
-length(intersect(rownames(mt.bygenes), rownames(all_norm)))
-
+names(mt.bygenes) = substr(gsub('.','-', names(mt.bygenes), fixed=T), 1, 15)
+mt.mut.g <- intersect(rownames(mt.bygenes), rownames(mutable)) ## 4845 genes with mutation data
+mt.exp.g <- intersect(rownames(mt.bygenes), rownames(all_norm)) ## 10766 genes with expression data
+mt.exp.p <- intersect(colnames(mt.bygenes), colnames(all_norm)) ## patients
+mt.exp.match = mt.bygenes[mt.exp.g, mt.exp.p]
+exp.mt.match = all_norm[mt.exp.g, 1:51] ## using log2, quantile normalize and correlation filtering RNAseq data
+mt.exp.all = cbind(mt.exp.match, exp.mt.match)
+mt.exp.spearman = apply(mt.exp.all, 1, function(x) cor(x[1:51], x[52:102], method="spearman"))
+mt.exp.pearson = apply(mt.exp.all, 1, function(x) cor(x[1:51], x[52:102], method="pearson"))
+mt.exp.MIC = apply(mt.exp.all, 1, function(x) MIC(x[1:51], x[52:102]))
+plot(sort(mt.exp.spearman))
+lines(sort(mt.exp.pearson), col="red")
+qplot(mt.exp.spearman)
+mt.exp.distcor
 
 ## what about hCG_1817306 and intergenic methylation regions
 ## using plyr, better used for less than 3 group standard
@@ -488,7 +499,7 @@ length(intersect(rownames(mt.bygenes), rownames(all_norm)))
 ##   ok[[1]] <-  ddply(mt, .(genes), summarize, TCGA.AA.3696.01_36=mean(TCGA.AA.3696.01_36, na.rm=T))
 ## }
 
-## use methylation 45 is better
+## use methylation 45 is better, too large, run on server later:: TODO
 png("meth27_dist.png")
 plot.ecdf(as.matrix(mt), col= "blue", lty=3)
 abline(h=0.6, col="red" , lty=2)
@@ -509,14 +520,14 @@ pdf("../temp/qc_single_met.pdf")
 apply(mt, 2, hist)
 dev.off()
 hist((mt[,1]))
-library(minfi)  ## analyze methylation array
+library(minfi)  ## analyze methylation array, DMC analysis
 png("mds_meth27.png", height=1200, width = 1200)
 mdsplot(as.matrix(mt), sampnames = colnames(mt))
 dev.off()
 
 ## use ucsc cpg islands
 library(minfi, verbose=f)
-cpg <- read.delim("../data/hg19_cgi", header = f, col.names=letters[1:4])
+cpg <- read.delim("../data/hg19_cgi", header = F, col.names=letters[1:4])
 
 meth.diff <- function(
   x="data",
@@ -529,7 +540,6 @@ meth.diff <- function(
   else
     {cat(class(x));cat("try other format\n")}
 }
-
 
 #########################################
 ## snp(cnv(priority) and noncnv) and cn(waiting)
@@ -553,17 +563,57 @@ cn.seq <- cbind(seq.cn, cn.exp)
 cn.array <- cbind(array.cn, cn.exp)
 cn.seq.MIC <- apply(cn.seq, 1, function(x) MIC(x[1:51], x[52:102]))
 cn.seq.MICv <- unlist(cn.seq.MIC)
+cn.seq.distance.cov <- apply(cn.seq, 1, function(x) distance.cov(x[1:51], x[52:102]))
+cn.seq.distance.cor <- apply(cn.seq, 1, function(x) distance.cor(x[1:51], x[52:102]))
 write.table(cn.seq.MICv, file="cn_seq_MIC.txt", sep="\t", quote=F)
 cn.seq.MICv = read.table("cn_seq_MIC.txt")
 seq.mean <- apply(cn.seq, 1, mean)
 cn.mean <- apply(cn.exp, 1, mean)
-cn.miss<-grep("SCGB1C1", names(seq.mean))  ## some "NA" missing values
+cn.miss<-grep("SCGB1C1", names(seq.mean))  ## some "NA" missing values, SCGB1C1 has been abandoned by MIC methods
+## in distance correlation methods, SCGB1C1 score 0, remove
 cn.seq.MICdf <- cbind(cn_mic=cn.seq.MICv, seq=seq.mean[-cn.miss], cn=cn.mean[-cn.miss])
 ggplot2::qplot( cn.mean[-cn.miss],seq.mean[-cn.miss], main="copy number vs RNAseq expression in colon cancer")
-p <- qplot(cn.mean[-cn.miss],seq.mean[-cn.miss], colour=cn.seq.MICv$x, main="copy number vs RNAseq expression in colon cancer")
+p <- qplot(cn.mean[-cn.miss],seq.mean[-cn.miss], geom="jitter", 
+           colour=cn.seq.MICv$x, main="copy number vs RNAseq MIC expression in colon cancer")
+p  ## MIC run so slow, read in from previous calculated 
+p <- qplot(cn.mean[-cn.miss],seq.mean[-cn.miss], geom="jitter", colour=cn.seq.distance.cor[-cn.miss], 
+           main="copy number vs RNAseq distance correlation expression in colon cancer")
 p
-qplot(cn.seq.MICv, binwidth=0.05)
-cn.array.MIC <- apply(cn.array, 1, function(x) MIC(x[1:51], x[52:102]))
+qplot(cn.seq.MICv$x, binwidth=0.05, main="copy number and RNAseq MIC correlation distribution")
+qplot(cn.seq.distance.cor, binwidth=0.05, main="copy number and RNAseq distance correlation distribution")
+
+### cn.array.MIC <- apply(cn.array, 1, function(x) MIC(x[1:51], x[52:102])) ## TODO, array correlation with cn
+
+## tissue specifit to calculate mutation specific genes
+## for a list of genes or samples
+cor.matrix(x, cpus = 1, ## using snow to parallel cpus
+           cormethod = "GCC", style = "adjacent.pairs",
+           pernum = 2000, sigmethod = "two.sided",
+           output = "matrix")
+
+## for a pair of genes or samples
+gini <- function(x, method="GCC"){
+  corpair <- cor.pair(c(1,2), GEMatrix = x, rowORcol = "row",
+                      cormethod = method, pernum = 100,
+                      sigmethod = "two.sided")
+  corp <- gcc.corfinal(corpair)
+  return(c(cor=corp$gcc.fcor, p=corp$gcc.fpvalue))  ## output 
+}
+
+x <- getsgene(rnaseq)$tsgene
+thm <- gcc.tsheatmap(x[1:100,], cpus = 1, cormethod = "GCC",
+                     distancemethod = "Raw", clustermethod = "complete")
+ghm <- gcc.heatmap(x, cpus = 1, cormethod = "GCC",
+                   distancemethod = "Raw", clustermethod = "complete", labRow = "")
+
+## C version of gini for network construction, fastest
+ajm = adjacencymatrix( mat, method = "GCC" ) ## for construct transcriptomics network
+library(QuACN)  ## graph
+library(network) ## for plot network
+diag(m) <- 0
+g <- network(m, directed=FALSE)
+h <- network.copy(g) #Note: same as h<-g
+which.matrix.type(m)
 
 ###########################################
 ## cluster and icluster and classification
@@ -619,7 +669,6 @@ seq_match_common$apc$w[interdriverw]
 ###############################################
 #### 1. braf
 interdriverw <- intersect(as.vector(driver),names(seq_match_common$apc$w))
-
 driver.diff <- intersect(driver, indexs0.3)
 braf.diff <- intersect(braf$genes, indexs0.3)
 ## focus on braf
@@ -653,14 +702,39 @@ axis(2, at=seq(min(y), max(y), length=length(y)), labels = "BRAF", las=1, ## sid
      outer=F, tick = F, cex.axis=1)
 dev.off()
 
+library(rsgcc)
 seq.brafp <- apply(seq.braf, 1, function(x) cor(x, as.numeric(all_norm["BRAF", 1:51]), method="pearson"))
 seq.brafcor <- apply(seq.braf, 1, function(x) cor(x, as.numeric(all_norm["BRAF", 1:51]), method="spearman"))
 seq.brafMIC <- apply(seq.braf, 1, function(x) MIC(x, as.numeric(all_norm["BRAF", 1:51])))
-seq.brafdist <- apply(seq.braf, 1, function(x) distance(x, as.numeric(all_norm["BRAF", 1:51])))
-seq.brafkendall <- apply(seq.braf, 1, function(x) cor(x, as.numeric(all_norm["BRAF", 1:51]), method="kendall"))
+## MIC vs random correlation
+plot(seq.brafMIC, type="l", col="red", ylim=c(0,1))
+for (i in 1:10){
+  sample1 <- all_norm[sample(1:length(all_norm[,1]), length(seq.brafcor)), 1:51] ##MIC compatible with diff lengths
+  sample1.MIC <- apply(sample1, 1, function(x) MIC(x, as.numeric(all_norm["BRAF", 1:51])))
+  lines(sample1.MIC, col="blue", lty=3)
+}
 
+seq.brafdist <- apply(seq.braf, 1, function(x) distance.cor(x, as.numeric(all_norm["BRAF", 1:51])))
+
+plot(seq.brafdist, type="l", col="red", ylim=c(0,1))
+for (i in 1:100){
+  sample1 <- all_norm[sample(1:length(all_norm[,1]), length(seq.brafcor)), 1:51]
+  sample1.dist <- apply(sample1, 1, function(x) distance.cor(x, as.numeric(all_norm["BRAF", 1:51])))
+  lines(sample1.dist, col="blue", lty=3)
+}
+
+seq.brafkendall <- apply(seq.braf, 1, function(x) cor(x, as.numeric(all_norm["BRAF", 1:51]), method="kendall"))
+seq.brafgini <- apply(seq.braf, 1, function(x) gini(rbind(x, as.numeric(all_norm["BRAF", 1:51])), method="GCC"))
+library(biwt)
+seq.brafBI <- apply(seq.braf,
+                    1, function(x) biwt.cor(rbind(x, as.numeric(all_norm["BRAF", 1:51])), output="vector"))  
+library(mgcv) ## multiple model
+qplot(seq.brafgini[1,], seq.brafgini[2,], geom=c("smooth", "jitter"), xlab="gini correlation", ylab="p.value",
+      main = "permutation 100 times p.value vs gini correlation")  ## jitter
 qplot(seq.brafcor, seq.brafMIC)
-scatterplot(as.vector(seq.brafcor), seq.brafMIC)
+car::scatterplot(as.vector(seq.brafcor), seq.brafMIC)
+#qplot(carat, price, data = diamonds, geom = "smooth",
+#      colour = color)
 
 ## par(bg="black")
 ## using RNA sequence
@@ -669,50 +743,68 @@ lines(seq.brafMIC, col="blue", lty=2)
 lines(seq.brafdist, col="black", lty=3)
 lines(seq.brafp, col="purple", lty=4)
 lines(seq.brafkendall, col="green", lty=5)
+lines(seq.brafgini[1,], col="#EEAD0E", lty=6)
+lines(seq.brafBI, col="#8B7355", lty=7)
 title("BRAF essential genes' correlation methods comparison")
-legend("bottomright", paste("cor:", c("spearman", "MIC", "distance", "pearson", "kendall")),
-       inset=0.01, lty=1:5, col=c("red", "blue", "black", "purple", "green"), border="black", merge=T)
+legend("bottomright", paste("cor:", c("spearman", "MIC", "distance", "pearson", "kendall", "gini", "Biwt")),
+       inset=0.01, lty=1:7, col=c("red", "blue", "black", "purple", "green","#EEAD0E","#8B7355"), border="black", merge=T)
+##source("http://research.stowers-institute.org/efg/R/Color/Chart/ColorChart.R")
+
+
 
 
 #########################################
 ## micRNA GA, Hiseq(wait)
 #########################################
 miRNA <- read.table("../data/miRNA_all_expressionGA.txt", header=T, row.names=1)
-miRNArecords <- read.xls("~/Desktop/miRecords_version3.xls", sheet=1)
+miRNAHi <- read.table("../data/miRNA_Hiseq.txt", header=T, row.names=1)
+miRNArecords <- read.xls("~/Desktop/DataRef/miRecords_version3.xls", sheet=1)
 miRNAmatch <- subset(miRNArecords, Target.gene_species_scientific=="Homo sapiens", select=c(2,4,8))
+##miRNAmatch <- miRNArecords[, c(2,4,8)]
 
-miRNAmatch[,3] <- gsub('*','', miRNAmatch[,3],fixed=T)
+miRNAmatch[,3] <- gsub('\\*$','', miRNAmatch[,3],perl=T)
 miRNAmatch[,3] <- gsub('[','', miRNAmatch[,3],fixed=T)
 miRNAmatch[,3] <- gsub(']','', miRNAmatch[,3],fixed=T)
 miRNAmatch[,3] <- gsub('has','hsa', miRNAmatch[,3],fixed=T)
 miRNAmatch[,3] <- gsub('R','r', miRNAmatch[,3],fixed=T)
-
-mitest <- list()
-for (i in seq(along.with=rownames(miRNA))){
-  mitest[[i]] <- grep(rownames(miRNA)[i], miRNAmatch[,3], perl=T)
-}
 
 length(intersect(miRNAmatch[,3], rownames(miRNA)))
 
 colnames(miRNA) <- substr(gsub('.','-',colnames(miRNA),fixed=T), 1, 15)
 miRNA <- as.matrix(miRNA)
 mi.match <- intersect(colnames(miRNA), colnames(mutable))
+boxplot(log2(miRNA[,mi.match]))
 length(intersect(colnames(miRNA), colnames(mutable))) ## 44 patients
 
 ## micRNA array filter standard, one miRNA expression >0.5 account for 50% among patients
 ## inter quantile more than 1 when taken log2
-miRNA <- miRNA[apply(miRNA > 100, 1, sum)/length(miRNA[1,])>0.6 & apply(log2(miRNA), 1, IQR) > 1.5, ]
-mut.p <- colnames(mutable)[seq_array_mut.index[[ATM]]]
-## mut.p %in%
-## boxplot(y, x, log2(miRNA[, intersect(mut.p, colnames(miRNA))]), axes=F) ## all
-miRNA <- miRNA[, mi.match]
-colnames(miRNA) <- c("mut", "non")
+miRNA_all <- cbind(miRNA, miRNAHi)
 
-scale.miRNA <- t(scale(t(log2(miRNA))))
+## using correlation to filter miRNA data
+miRNA_f <- miRNA[apply(miRNA > 100, 1, sum)/length(miRNA[1,])>0.6 & apply(log2(miRNA), 1, IQR) > 1.5, ]
+miRNA_fHi <- miRNA[apply(miRNAHi > 100, 1, sum)/length(miRNAHi[1,])>0.6 & apply(log2(miRNAHi), 1, IQR) > 1.5, ]
+Hi.GA <- intersect(rownames(miRNA_f), rownames(miRNA_fHi))
+
+## match available corrected targets genes,
+miRNA.target <- subset(miRNAmatch, miRNAmatch[,3] %in% rownames(miRNA_f), select = c(2,3))
+
+## take *ATM* mutation as examples, classify mutated and non mutated
+mut.p <- colnames(mutable)[seq_array_mut.index[[ATM]]]
+miRNA.mutp = intersect(mut.p, colnames(miRNA))
+
+## boxplot(y, x, log2(miRNA[, intersect(mut.p, colnames(miRNA))]), axes=F) ## all
+miRNA_match <- miRNA_f[, mi.match]
+mi.matchs <- c()  ## mutation state
+mi.matchs[mi.match %in% miRNA.mutp] <- as.vector(paste('mut', 1:length(miRNA.mutp), sep=""))
+mi.matchs[!(mi.match %in% miRNA.mutp)] <- as.vector(paste('non', 1:(length(mi.match)-length(miRNA.mutp)), sep=""))
+
+colnames(miRNA_match) <- mi.matchs
+
+scale.miRNA <- t(scale(t(log2(miRNA_match))))
 miRNA_v <- as.vector(t(scale.miRNA))
-miRNA <- data.frame(expand.grid(y=colnames(miRNA), x=rownames(miRNA)),v=miRNA_v)
+miRNA_df <- data.frame(expand.grid(y=colnames(miRNA_match), x=rownames(miRNA_match)),v=miRNA_v)
 pdf("miRNA_filter.pdf")
-ggplot(miRNA, aes(y, x, fill = v, label = sprintf("%.1f", v)), xlab="", ylab="")+
+ggplot(miRNA_df, aes(y, x, fill = v, label = sprintf("%.1f", v)), xlab="", ylab="")+
   geom_tile() + geom_text() +
   scale_fill_gradient2(low = "blue", high = "red")
 dev.off()
@@ -721,22 +813,20 @@ col.aes <- brewer.pal(9,"RdYlBu")
 heatmap.2(scale.miRNA, trace="none", col=rev(col.aes), keysize=0.8, margins=c(10,10)) ## use margins to show fonts
 
 par(mar=c(1, 3, 0.2, 0.2), oma=c(0.5,2,1,2), mai=c(1,2,1,2))
-boxplot(log2(miRNA), outline=F, axes=F, frame=T, horizontal = T,
-        at=seq(1-0.2, ncol(miRNA)+0.3, length=ncol(miRNA)), xlim=1*c(1-0.5, ncol(miRNA)+0.7)) ## ajust at=, xlim=, to ajust box widths, <1 better
-p <- ggplot(miRNA[1:100,], aes(y, x, fill=y))
-p+geom_boxplot()
+boxplot(log2(miRNA_match), outline=F, axes=F, frame=T, horizontal = T, main = "micRNA data QC on mutation related patients",
+        at=seq(1-0.2, ncol(miRNA_match)+0.3, length=ncol(miRNA_match)), xlim=1*c(1-0.5, ncol(miRNA_match)+0.7)) ## ajust at=, xlim=, to ajust box widths, <1 better
 ## par(las=1) ## all horizontal
-axis(2, at=seq(1-0.2, ncol(miRNA)+0.3,length=ncol(miRNA)), labels = colnames(miRNA), las=2,
+axis(2, at=seq(1-0.2, ncol(miRNA_match)+0.3,length=ncol(miRNA_match)), labels = colnames(miRNA_match), las=2,
      tick = T, cex.axis=0.8, outer=F)
-par(mar=c(12, 0.3, 1, 1), oma=c(0.5,2,1,2), mai=c(3,1,1,0.5))
-boxplot(log2(miRNA), outline=F, axes=F, frame=T, horizontal = F,
-        at=seq(1-0.2, ncol(miRNA)+0.3, length=ncol(miRNA)), xlim=1*c(1-0.5, ncol(miRNA)+0.7)) ## ajust at=, xlim=, to ajust box widths, <1 better
-## par(las=1) ## all horizontal
-axis(1, at=1*(1:ncol(miRNA) - 0.2), labels = colnames(miRNA), las=2,
-     tick = T, cex.axis=0.8, outer=F, font=4) ## font and las to define character
-text(1,3, labels="test",srt=60)  ## for font angle =======
-boxplot(log2(miRNA))
 
+par(mar=c(12, 0.3, 1, 1), oma=c(0.5,2,1,2), mai=c(3,1,1,0.5))
+boxplot(log2(miRNA_match), outline=F, axes=F, frame=T, horizontal = F,
+        at=seq(1-0.2, ncol(miRNA_match)+0.3, length=ncol(miRNA_match)), xlim=c(1-0.5, ncol(miRNA_match)+0.7)) ## ajust at=, xlim=, to ajust box widths, <1 better
+## par(las=1) ## all horizontal
+axis(1, at=seq(1-0.2, ncol(miRNA_match)+0.3, length=ncol(miRNA_match)), labels = colnames(miRNA_match), las=2,
+     tick = F, cex.axis=0.8, outer=F, font=2) ## font and las to define character
+
+text(1,3, labels="test",srt=60)  ## for font angle ajustment
 #############################################
 ## protein array, level 2, need normalization
 ############################################
@@ -750,16 +840,20 @@ protein <- protein[-1, ]
 protein <- as.matrix(protein)
 ATM <- grep("^ATM.*", rownames(protein), perl=T)
 protein[ATM,]
-
 QC(protein, ggplot=FALSE)
 
 ## integrate different correlation method
 method=c("MIC", "distance", "spearman", "pearman", "kendall",
   "liquid", "entropy"))
 
-distance <- function(x, y){
+distance.cor <- function(x, y){
   require(energy)
-  dcov(x, y)
+  dcor(x, y)
+}
+
+distance.cov <- function(x, y){
+  require(energy)
+  dcov(dist(x), dist(y))
 }
 
 MIC <- function(x, y) {
