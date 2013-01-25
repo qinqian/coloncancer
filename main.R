@@ -67,7 +67,7 @@ normalization <- function(x ,transpose=TRUE, log2t=TRUE, pseudo = 0.0000001){
     if (log2t){
       x.norm <- normalize.quantiles(log2(as.matrix(x + pseudo)))
     }
-    else x.norm <- normalize.quantiles(x + pseudo)
+    else x.norm <- normalize.quantiles(as.matrix(x + pseudo))
   }
   colnames(x.norm) <- colnames(x)
   rownames(x.norm) <- rownames(x)
@@ -128,7 +128,7 @@ write.table(mutct$cl$APC, file="apc_type.txt", quote=F)
 ## normalization of expression
 ## 151 patients and 16145 genes
 Seq.genematch <- data.orig$data3[expseq.gene, expseq.patient]
-Seq.genematchnorm <- normalization(Seq.genematch)
+Seq.genematchnorm <- normalization(Seq.genematch, log2t=TRUE)  ## RNAseq take log2
 write.table(Seq.genematchnorm, file="../results/colon_seq_normaftermatchexp.txt", sep="\t", quote=F)
 
 rownames(data.orig$data1) <- data.orig$data1$ProbeID
@@ -473,24 +473,39 @@ mt.mut.g <- intersect(rownames(mt.bygenes), rownames(mutable)) ## 4845 genes wit
 mt.exp.g <- intersect(rownames(mt.bygenes), rownames(all_norm)) ## 10766 genes with expression data
 mt.exp.p <- intersect(colnames(mt.bygenes), colnames(all_norm)) ## patients
 mt.exp.match = mt.bygenes[mt.exp.g, mt.exp.p]
+mt.exp.match.norm = normalization(mt.exp.match, , log2t=FALSE)  # do not take log2
+par(mfrow=c(1,2))
+boxplot(mt.exp.match.norm, ylim=c(-0.5, 1))
+boxplot(mt.exp.match)
+
 exp.mt.match = all_norm[mt.exp.g, 1:51] ## using log2, quantile normalize and correlation filtering RNAseq data
 mt.exp.all = cbind(mt.exp.match, exp.mt.match)
+mt.exp.all.norm = cbind(mt.exp.match.norm, exp.mt.match)
 mt.exp.spearman = apply(mt.exp.all, 1, function(x) cor(x[1:51], x[52:102], method="spearman"))
-mt.exp.pearson = apply(na.exclude(mt.exp.all), 1, function(x) cor(x[1:51], x[52:102], method="pearson")) ## same
+mt.exp.spearman.norm = apply(mt.exp.all.norm, 1, function(x) cor(x[1:51], x[52:102], method="spearman"))
+
+mt.exp.pearson = apply(mt.exp.all, 1, function(x) cor(x[1:51], x[52:102], method="pearson")) ## same
+mt.exp.pearson.norm = apply(mt.exp.all.norm, 1, function(x) cor(x[1:51], x[52:102], method="pearson")) ## same
+
 mt.exp.distcor = apply(na.exclude(mt.exp.all), 1, function(x) distance.cov(x[1:51], x[52:102])) ## NA, omit, exclude
 mt.exp.MIC = apply(mt.exp.all, 1, function(x) MIC(x[1:51], x[52:102]))
 mt.exp.biwt = apply(na.exclude(mt.exp.all), 1, function(x) biwt.cor(rbind(jitter(x[1:51]), jitter(x[52:102])), output="vector"))                    
 mt.exp.MIC.v = unlist(mt.exp.MIC)
 
-plot(sort(mt.exp.spearman))
-lines(sort(mt.exp.pearson), col="red")
-lines(sort(mt.exp.MIC.v), col="blue")
-lines(sort(mt.exp.distcor), col="green")
+plot(sort(mt.exp.spearman), type="l", lty=4, lwd=2)
+lines(sort(mt.exp.pearson), col="red", lty=3, lwd=3)
+lines(sort(mt.exp.MIC.v), col="blue", lty=1)
+lines(sort(mt.exp.distcor), col="green", lty=2)
+lines(sort(mt.exp.biwt), col="hotpink", lty=5)
+legend('topleft',c("MIC", "dist", "spearman", "pearson", 'Biwt'), col=c("blue", "green", "black", 'red','hotpink'),
+       inset=.01, lty=1:5)
 
-qplot(mt.exp.spearman)
-qplot(mt.exp.distcor) ## false
-qplot(mt.exp.pearson)
-qplot(mt.exp.MIC.v)
+qplot(mt.exp.spearman, main="methylation and expression correlation")
+hist(mt.exp.spearman.norm, main="methylation and expression correlation", col="blue")
+qplot(mt.exp.distcor, main="methylation and expression correlation") ## false
+qplot(mt.exp.pearson, main="methylation and expression correlation")
+qplot(mt.exp.MIC.v, main="methylation and expression correlation")
+qplot(mt.exp.biwt, main="methylation and expression correlation")
 
 ## what about hCG_1817306 and intergenic methylation regions
 ## using plyr, better used for less than 3 group standard
@@ -757,11 +772,7 @@ lines(seq.brafBI, col="#8B7355", lty=7)
 title("BRAF essential genes' correlation methods comparison")
 legend("bottomright", paste("cor:", c("spearman", "MIC", "distance", "pearson", "kendall", "gini", "Biwt")),
        inset=0.01, lty=1:7, col=c("red", "blue", "black", "purple", "green","#EEAD0E","#8B7355"), border="black", merge=T)
-##source("http://research.stowers-institute.org/efg/R/Color/Chart/ColorChart.R")
-
-
-
-
+source("http://research.stowers-institute.org/efg/R/Color/Chart/ColorChart.R")
 #########################################
 ## micRNA GA, Hiseq(wait)
 #########################################

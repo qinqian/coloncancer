@@ -3,3 +3,6 @@ GSEA-P-R
 test
 foo.*
 *.py~
+HansRosling.R
+nations.json
+.*~
