@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 """
-TODO:
-use R and file_manifect.txt to calculate batch average
-for the delimiter has the same sequence.
+TCGA data downloaded in batches
 """
 # QinQian
 
@@ -22,7 +20,6 @@ def prepr(dl):
     for name in dl:
         nm = name.split("__")[2][:15]
         nmlist.append(nm)
-
         with open(name) as mirna:
             mirna.readline()
             dall = [d.split('\t')[3] for d in mirna.readlines()]

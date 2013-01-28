@@ -6,3 +6,5 @@ foo.*
 HansRosling.R
 nations.json
 .*~
+.sh~
+.R~
