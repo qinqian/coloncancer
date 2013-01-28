@@ -3,6 +3,9 @@
 ## preprocessing refgene to bed with symbol
 #sed 1d ./processed/hg19.refgene | cut -f 3,5,6,13 > ./processed/hg19.bed
 
+
+## define the working directory
+
 ## gather data and classify simply
 gather() {
     echo $0

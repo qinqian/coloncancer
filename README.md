@@ -15,4 +15,14 @@ method
 
 external
 =========
-GSEA-P-R
+
+GSEA-P-R may involve in Functional analysis pipeline
+
+
+
+
+Diretory Tree
+==============
+
+
+

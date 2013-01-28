@@ -12,6 +12,10 @@
 
 #join -j 1 test1 test2  | join -j 1 test3 - | join -j 1 test4 -
 ## by cut together and paste once
+
+## ways to merge on common fields
+
+
 i=0
 sed 1d snp_cnvTCGA-AA-3556-01.txt | cut -f 1 | sed 1i\
 "genes" > delim
