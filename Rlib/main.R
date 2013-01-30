@@ -29,7 +29,7 @@ SeqArraymatch <- function(datalist=""){
   ## mut filter by mutation frequency
   write.table(mut_class, file="allpatientColonMutationTop.txt", quote=F, sep="\t", col.names = T)
   mutation.table <- Mut.Table(datalist$data2, mutation.patient, mut_class)
-  ## match with expression, 51 patients
+  ## mutation data match with expression, 51 patients
   rownames(mutation.table) <- mutation.table$genes
   write.table(mutation.table, file="allpatient_colon_somatic_mutations.txt", quote=F, sep="\t", col.names = T, row.names=T)
   ## match mutation genes symbol with expression genes symbol
@@ -216,6 +216,7 @@ corcutoff.out(index0.2, cutoff=0.2, seq_array_mut)
 corcutoff.out(indexs0.5, cutoff="spearman0.5", seq_array_mut)
 corcutoff.out(indexs0.2, cutoff="spearman0.2", seq_array_mut)
 ## after spearman correlation filter and normalization
+## all_norm filter by spearman correlation 0.3
 all_norm <- corcutoff.out(indexs0.3, cutoff="spearman0.3", seq_array_mut)
 
 ## qc of outlier point
@@ -473,7 +474,7 @@ mt.mut.g <- intersect(rownames(mt.bygenes), rownames(mutable)) ## 4845 genes wit
 mt.exp.g <- intersect(rownames(mt.bygenes), rownames(all_norm)) ## 10766 genes with expression data
 mt.exp.p <- intersect(colnames(mt.bygenes), colnames(all_norm)) ## patients
 mt.exp.match = mt.bygenes[mt.exp.g, mt.exp.p]
-mt.exp.match.norm = normalization(mt.exp.match, , log2t=FALSE)  # do not take log2
+mt.exp.match.norm = normalization(mt.exp.match, , log2t=FALSE)  # do not take log2, 
 par(mfrow=c(1,2))
 boxplot(mt.exp.match.norm, ylim=c(-0.5, 1))
 boxplot(mt.exp.match)
@@ -589,6 +590,14 @@ cn.seq.MIC <- apply(cn.seq, 1, function(x) MIC(x[1:51], x[52:102]))
 cn.seq.MICv <- unlist(cn.seq.MIC)
 cn.seq.distance.cov <- apply(cn.seq, 1, function(x) distance.cov(x[1:51], x[52:102]))
 cn.seq.distance.cor <- apply(cn.seq, 1, function(x) distance.cor(x[1:51], x[52:102]))
+
+## QC mearsurement by correlation
+cn.seq.sd <- apply(cn.seq, 1, function(x) sd(x)) ## 1:51 copynumber, 52:102 expression
+cn.seq.spearman <- apply(cn.seq, 1, function(x) cor(x[1:51], x[52:102], method="spearman"))
+cn.seq.pearson <- apply(cn.seq, 1, function(x) cor(x[1:51], x[52:102], method="pearson"))
+qplot(cn.seq.spearman)
+qplot(cn.seq.pearson)
+
 write.table(cn.seq.MICv, file="cn_seq_MIC.txt", sep="\t", quote=F)
 cn.seq.MICv = read.table("cn_seq_MIC.txt")
 seq.mean <- apply(cn.seq, 1, mean)
@@ -603,14 +612,16 @@ p  ## MIC run so slow, read in from previous calculated
 p <- qplot(cn.mean[-cn.miss],seq.mean[-cn.miss], geom="jitter", colour=cn.seq.distance.cor[-cn.miss], 
            main="copy number vs RNAseq distance correlation expression in colon cancer")
 p
+
 qplot(cn.seq.MICv$x, binwidth=0.05, main="copy number and RNAseq MIC correlation distribution")
+
 qplot(cn.seq.distance.cor, binwidth=0.05, main="copy number and RNAseq distance correlation distribution")
 
 ### cn.array.MIC <- apply(cn.array, 1, function(x) MIC(x[1:51], x[52:102])) ## TODO, array correlation with cn
 
 ## tissue specifit to calculate mutation specific genes
 ## for a list of genes or samples
-cor.matrix(x, cpus = 1, ## using snow to parallel cpus
+cor.matrix(x, cpus = 1, ## using snow to parallel cpus, example for snow
            cormethod = "GCC", style = "adjacent.pairs",
            pernum = 2000, sigmethod = "two.sided",
            output = "matrix")
@@ -733,11 +744,17 @@ seq.brafMIC <- apply(seq.braf, 1, function(x) MIC(x, as.numeric(all_norm["BRAF",
 ## MIC vs random correlation
 plot(seq.brafMIC, type="l", col="red", ylim=c(0,1))
 for (i in 1:10){
-  sample1 <- all_norm[sample(1:length(all_norm[,1]), length(seq.brafcor)), 1:51] ##MIC compatible with diff lengths
+  sample1 <- all_norm[-(rownames(all_norm)%in%as.vector(braf$genes)),][sample(1:length(all_norm[-(rownames(all_norm)%in%as.vector(braf$genes)),1]), length(seq.brafcor)), 1:51] ##MIC compatible with diff lengths
   sample1.MIC <- apply(sample1, 1, function(x) MIC(x, as.numeric(all_norm["BRAF", 1:51])))
   lines(sample1.MIC, col="blue", lty=3)
 }
 
+## using boxplot ?? for QC vs random genes
+#MIC_sample = data.frame(gl(, , length=length(sample1.MIC), labels=c("sample", "MIC")))
+#qplot(,data=)
+
+## ROC curve for that
+## We consider the ones correlated with background geomics in the rank among 100 to be true positive
 seq.brafdist <- apply(seq.braf, 1, function(x) distance.cor(x, as.numeric(all_norm["BRAF", 1:51])))
 
 plot(seq.brafdist, type="l", col="red", ylim=c(0,1))
@@ -772,6 +789,15 @@ lines(seq.brafBI, col="#8B7355", lty=7)
 title("BRAF essential genes' correlation methods comparison")
 legend("bottomright", paste("cor:", c("spearman", "MIC", "distance", "pearson", "kendall", "gini", "Biwt")),
        inset=0.01, lty=1:7, col=c("red", "blue", "black", "purple", "green","#EEAD0E","#8B7355"), border="black", merge=T)
+braf.cor = data.frame(mic=seq.brafMIC, dist=seq.brafdist, pearson = seq.brafp, spearman = seq.brafcor,
+                      kendall = seq.brafkendall, gini = seq.brafgini[1,], BI = seq.brafBI)
+boxplot(braf.cor)
+braf.cor.factor = gl(n=7, k=length(seq.brafcor), length=7*length(seq.brafcor),
+                     labels=c("MIC", "distance", "pearson", "spearman", "kendall", "gini", "biwt"))
+braf.gg.cor = data.frame(methods=braf.cor.factor, cor= c(seq.brafMIC, seq.brafdist, seq.brafp, seq.brafcor,seq.brafkendall,
+                                          seq.brafgini[1,], seq.brafBI))
+qplot(methods,  cor ,data=braf.gg.cor, geom="boxplot")
+
 source("http://research.stowers-institute.org/efg/R/Color/Chart/ColorChart.R")
 #########################################
 ## micRNA GA, Hiseq(wait)
@@ -847,12 +873,14 @@ axis(1, at=seq(1-0.2, ncol(miRNA_match)+0.3, length=ncol(miRNA_match)), labels =
      tick = F, cex.axis=0.8, outer=F, font=2) ## font and las to define character
 
 text(1,3, labels="test",srt=60)  ## for font angle ajustment
+
 #############################################
 ## protein array, level 2, need normalization
 ############################################
-protein <- read.table("../data/colon_protein_level2.txt", header=T,row.names=1)
+library(RPPanalyzer)
+protein <- read.table("Results/colon_protein_level2.txt", header=T,row.names=1)
 colnames(protein) <- substr(gsub('.','-',colnames(protein),fixed=T), 1, 15)
-protein.match <- (intersect(colnames(protein), colnames(mutable))) ## 24 patients
+protein.match <- (intersect(colnames(protein), colnames(mutable))) ## 24 patients with mutation data
 ## BRAF classified
 braf.mut <- colnames(mutable)[which(mutable["BRAF" ,] >= 1)]
 ## remove order
@@ -861,6 +889,15 @@ protein <- as.matrix(protein)
 ATM <- grep("^ATM.*", rownames(protein), perl=T)
 protein[ATM,]
 QC(protein, ggplot=FALSE)
+protein.norm = normalization(protein, log2=F)
+colnames(protein.norm) <- substr(gsub('.','-',colnames(protein),fixed=T), 1, 15)
+rownames(protein.norm) <- toupper(rownames(protein.norm))
+
+intersect(names(data.orig$data3), names(protein.norm)) ## 93 patients with RNAseq data
+intersect(names(data.orig$data1), names(protein.norm)) ## 74 patients with array data
+(intersect(unique(substr(data.orig$data2$Tumor_Sample_Barcode, 1, 15)), names(protein.norm))) ## 74 patients with array data
+intersect(intersect(names(data.orig$data1), names(data.orig$data3)),   ## array, seq and mutation 51 patients
+          substr(data.orig$data2$Tumor_Sample_Barcode,1,15))           ## generate mutable patients
 
 ## integrate different correlation method
 method=c("MIC", "distance", "spearman", "pearman", "kendall",
@@ -872,13 +909,14 @@ distance.cor <- function(x, y){
 }
 
 distance.cov <- function(x, y){
+  ## covariance
   require(energy)
   dcov(dist(x), dist(y))
 }
 
 MIC <- function(x, y) {
       minedata <- rbind(x, y)
-      source("MINE.R")
+      source("../Codes/MINE/MINE.r")
       rMINE(minedata, "matrix", 0)
       minecor <- read.csv("matrix,mv=0,cv=0.0,B=n^0.6,Results.csv")[,3]
       return(minecor)
